@@ -3,4 +3,4 @@ Usage
 	go run fmi.go --build text_file  [--debug]
 	
 (2) Load index; takes an index file, loads it.
-	go run fmi.go --load index_file  [--debug]
+	go run fmi.go --test index_file queries_file  [--debug]

@@ -12,6 +12,7 @@ import (
 	"sort"
 	"flag"
 	"log"
+	"bufio"
 )
 
 var Debug bool
@@ -98,7 +99,7 @@ func (I *FMindex) Build (file string) {
 	if err != nil {
 		panic(err)
 	}
-	SEQ = byte_array
+	SEQ = append(byte_array, byte('$'))
 	I.END_POS = build_bwt(file+".bwt")
 	I.BuildIndex()
 
@@ -123,40 +124,38 @@ func (I *FMindex) Load (file string) {
 	}
 }
 //-----------------------------------------------------------------------------
-func (I *FMindex) Search(pattern []byte) {
+func (I *FMindex) Search(pattern []byte) int {
 	p := len(pattern)
-	i := p - 1
 	c := pattern[p - 1]
 	sp := I.C[byte(c)]
 	ep := I.EP[byte(c)]
-	if Debug { fmt.Println("pattern: ", string(pattern), "\n\t", string(c), sp, ep) }
-	for i > 0 && sp <= ep {
+	// if Debug { fmt.Println("pattern: ", string(pattern), "\n\t", string(c), sp, ep) }
+	for i:= p-1; i > 0 && sp <= ep; i-- {
 	  	c = pattern[i - 1]
 
 	  	// Can we assume '$' is not in the query?
 	  	// Do we need this?  What is the logic here?
-	  	if c == '$' {
-	      if sp - 2 < I.END_POS {
-	          I.OCC[byte(c)][sp - 1 - 1] = 0
-	      } else {
-	          I.OCC[byte(c)][sp - 1 - 1] = 1
-	      }
-	      if ep - 1 < I.END_POS {
-	          I.OCC[byte(c)][ep - 1] = 0
-	      } else {
-	          I.OCC[byte(c)][ep - 1] = 1
-	      }
-	  }
+	  // 	if c == '$' {
+	  //     if sp - 2 < I.END_POS {
+	  //         I.OCC[byte(c)][sp - 1 - 1] = 0
+	  //     } else {
+	  //         I.OCC[byte(c)][sp - 1 - 1] = 1
+	  //     }
+	  //     if ep - 1 < I.END_POS {
+	  //         I.OCC[byte(c)][ep - 1] = 0
+	  //     } else {
+	  //         I.OCC[byte(c)][ep - 1] = 1
+	  //     }
+	  // }
 
 	  sp = I.C[byte(c)] + I.OCC[byte(c)][sp - 1]
 	  ep = I.C[byte(c)] + I.OCC[byte(c)][ep] - 1
-	  i--
-	  if Debug { fmt.Println("\t", string(c), sp, ep) }
+	  // if Debug { fmt.Println("\t", string(c), sp, ep) }
 	}
 	if ep < sp || (ep==0 && sp==0){
-	  fmt.Print("0 occurence\n")
+	  return 0
 	} else {
-	  fmt.Print(ep - sp + 1, " occurrrences\n")
+	  return ep-sp+1
 	}
 }
 
@@ -195,9 +194,21 @@ func print_byte_array(a []byte) {
 }
 
 //-----------------------------------------------------------------------------
+func Readln(r *bufio.Reader) (string, error) {
+  var (
+  		// isPrefix bool = true
+      err error = nil
+      line, ln []byte
+     )
+      line, _, err = r.ReadLine()
+      ln = append(ln, line...)
+  return string(ln),err
+}
+
+//-----------------------------------------------------------------------------
 func main() {
 	var build_file = flag.String("build", "", "Specify a file, from which to build FM index.")
-	var load_file = flag.String("load", "", "Specify a file (saved FM index), from which to load.")
+	var test = flag.Bool("test", false, "index.fm  queries.txt")
 	flag.BoolVar(&Debug, "debug", false, "Turn on debug mode.")
 	flag.Parse()
 
@@ -208,17 +219,26 @@ func main() {
 		print_byte_array(SEQ)
 		print_byte_array(BWT)
 		fmt.Println(SA)
-	} else if *load_file != "" {
+	} else if *test {
 		var idx FMindex
-		idx.Load(*load_file)
+		idx.Load(os.Args[2])
 
-		// Search the substring pattern using FM index
-		// to do: use strings.count to automate tests
-		pattern := []string{"q", "ad", "a", "b", "c", "r", "ab", "abra", "abr", "ra", "dabra"}
-		for i:=0; i<len(pattern); i++ {
-		  fmt.Print(pattern[i],":\t")
-		  idx.Search([]byte(pattern[i]))
+		f, err := os.Open(os.Args[3])
+		if err != nil { panic("error opening file " + os.Args[3]) }
+		r := bufio.NewReader(f)
+		for i:=0; ; i++ {
+			line, err := r.ReadBytes('\n')
+			if err != nil { break }
+			line = line[:len(line)-1]
+			if len(line) > 0 {
+				// fmt.Println(string(line), "\t", idx.Search(line))
+				fmt.Println("Query", i, "\t", idx.Search(line))
+			}
 		}
+		// pattern := []string{"q", "ad", "a", "b", "c", "r", "ab", "abra", "abr", "ra", "dabra"}
+		// for i:=0; i<len(pattern); i++ {
+		//   fmt.Print(pattern[i],"\t", idx.Search([]byte(pattern[i])), "\n")
+		// }
 	}
 
 }
