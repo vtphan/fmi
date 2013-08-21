@@ -20,13 +20,14 @@ import (
 var SEQ []byte
 var SA []int
 var BWT []byte
+var Freq map[byte]int  // Frequency of each symbol
 
 type FMindex struct{
-	C map[byte]int
-	OCC map[byte][]int
-	END_POS int
-	SYMBOLS []int
-	EP map[byte]int
+	C map[byte]int  // count table
+	OCC map[byte][]int // occurence table
+	END_POS int // position of "$" in the text
+	SYMBOLS []int  // sorted symbols
+	EP map[byte]int // ending row/position of each symbol
 }
 //
 //-----------------------------------------------------------------------------
@@ -37,8 +38,16 @@ func (s BySuffix) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 func (s BySuffix) Less(i, j int) bool { return (bytes.Compare(SEQ[s[i]:], SEQ[s[j]:]) == -1) }
 
 //-----------------------------------------------------------------------------
-func build_bwt() int {
+func build_bwt(file string) int {
 	var end_pos int
+	Freq = make(map[byte]int)
+	SA = make([]int, len(SEQ))
+	for i := 0; i < len(SEQ); i++ {
+		SA[i] = i
+		Freq[SEQ[i]]++
+	}
+	sort.Sort(BySuffix(SA))
+
 	BWT = make([]byte, len(SEQ))
 	for i := 0; i < len(SA); i++ {
 		BWT[i] = SEQ[(len(SEQ)+SA[i]-1)%len(SEQ)]
@@ -46,54 +55,27 @@ func build_bwt() int {
 			end_pos = i
 		}
 	}
-	ioutil.WriteFile("BWT.txt", BWT, 0644)
+	ioutil.WriteFile(file, BWT, 0644)
+	fmt.Println("Save BWT to", file)
 	return end_pos
 }
 
 //-----------------------------------------------------------------------------
-// return a length-l-substring of the text ending at position SA[r]-1
-// terminate if reaches beyond the first index.
-//-----------------------------------------------------------------------------
-func (I *FMindex) r_substr(r int, l int) []byte {
-	var s = make([]byte, l)
-	var i int
-	for i = l - 1; (i >= 0) && (r != I.END_POS); i-- {
-		s[i] = BWT[r]
-		r = (I.C[BWT[r]] + I.OCC[BWT[r]][r]) - 1 // substract 1 because index starts from 0
-	}
-	if i < 0 {
-		return s
-	}
-	return s[i+1:]
-}
-
-//-----------------------------------------------------------------------------
-func (I *FMindex) BuildIndex(byte_array []byte) {
+func (I *FMindex) BuildIndex() {
 	I.C = make(map[byte]int)
 	I.OCC = make(map[byte][]int)
 	I.EP = make(map[byte]int)
 
-	SEQ = byte_array
-
-	var count = make(map[byte]int)
-
-	SA = make([]int, len(SEQ))
-	for i := 0; i < len(SEQ); i++ {
-		SA[i] = i
-		count[SEQ[i]]++
-	}
-	for c := range count {
+	for c := range Freq {
 		I.SYMBOLS = append(I.SYMBOLS, int(c))
 		I.OCC[c] = make([]int, len(SEQ))
 		I.C[c] = 0
 	}
 	sort.Ints(I.SYMBOLS)
-	sort.Sort(BySuffix(SA))
-	I.END_POS = build_bwt()
 	for i := 1; i < len(I.SYMBOLS); i++ {
 		curr_c, prev_c := byte(I.SYMBOLS[i]), byte(I.SYMBOLS[i-1])
-		I.C[curr_c] = I.C[prev_c] + count[prev_c]
-		I.EP[curr_c] = I.C[curr_c] + count[curr_c] - 1
+		I.C[curr_c] = I.C[prev_c] + Freq[prev_c]
+		I.EP[curr_c] = I.C[curr_c] + Freq[curr_c] - 1
 	}
 
 	for i := 0; i < len(BWT); i++ {
@@ -107,7 +89,6 @@ func (I *FMindex) BuildIndex(byte_array []byte) {
 	delete(I.OCC, '$')
 }
 
-
 //-----------------------------------------------------------------------------
 
 func (I *FMindex) Build (file string) {
@@ -115,7 +96,9 @@ func (I *FMindex) Build (file string) {
 	if err != nil {
 		panic(err)
 	}
-	I.BuildIndex(byte_array)
+	SEQ = byte_array
+	I.END_POS = build_bwt(file+".bwt")
+	I.BuildIndex()
 
 	// Encode the struct FMindex y using Gob, then store it into "CompressFMindex.dat"
 	var fout bytes.Buffer
@@ -124,7 +107,8 @@ func (I *FMindex) Build (file string) {
 	if err != nil {
 	  log.Fatal("Build FM index; encode error:", err)
 	}
-	ioutil.WriteFile(file + ".fm", fout.Bytes(), 0600)
+	ioutil.WriteFile(file+".fm", fout.Bytes(), 0600)
+	fmt.Println("Save index to", file+".fm")
 }
 
 //-----------------------------------------------------------------------------
@@ -172,6 +156,23 @@ func (I *FMindex) Search(pattern []byte) {
 }
 
 //-----------------------------------------------------------------------------
+// return a length-l-substring of the text ending at position SA[r]-1
+// terminate if reaches beyond the first index.
+//-----------------------------------------------------------------------------
+func (I *FMindex) r_substr(r int, l int) []byte {
+	var s = make([]byte, l)
+	var i int
+	for i = l - 1; (i >= 0) && (r != I.END_POS); i-- {
+		s[i] = BWT[r]
+		r = (I.C[BWT[r]] + I.OCC[BWT[r]][r]) - 1 // substract 1 because index starts from 0
+	}
+	if i < 0 {
+		return s
+	}
+	return s[i+1:]
+}
+
+//-----------------------------------------------------------------------------
 func (I *FMindex) show() {
 	fmt.Printf(" %8s  OCC\n", "C")
 	for i := 0; i < len(I.SYMBOLS); i++ {
@@ -206,6 +207,7 @@ func main() {
 		idx.Load(*load_file)
 
 		// Search the substring pattern using FM index
+		// to do: use strings.count to automate tests
 		pattern := []string{"q", "ad", "a", "b", "c", "r", "ab", "abra", "abr", "ra", "dabra"}
 		for i:=0; i<len(pattern); i++ {
 		  fmt.Print(pattern[i],":\t")
