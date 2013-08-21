@@ -1,6 +1,6 @@
 Usage
 (1) Build index; takes a file containing the text, builds and saves index to file named text_file.fm
-	go run fmi.go --build text_file
+	go run fmi.go --build text_file  [--debug]
 	
 (2) Load index; takes an index file, loads it.
-	go run fmi.go --load index_file
+	go run fmi.go --load index_file  [--debug]
