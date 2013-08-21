@@ -14,6 +14,8 @@ import (
 	"log"
 )
 
+var Debug bool
+
 //-----------------------------------------------------------------------------
 // Global variables: sequence (SEQ), suffix array (SA), BWT, FM index (C, OCC)
 //-----------------------------------------------------------------------------
@@ -127,10 +129,12 @@ func (I *FMindex) Search(pattern []byte) {
 	c := pattern[p - 1]
 	sp := I.C[byte(c)]
 	ep := I.EP[byte(c)]
-	fmt.Println("pattern: ", string(pattern))
-	fmt.Println("\t", string(c), sp, ep)
+	if Debug { fmt.Println("pattern: ", string(pattern), "\n\t", string(c), sp, ep) }
 	for i > 0 && sp <= ep {
 	  	c = pattern[i - 1]
+
+	  	// Can we assume '$' is not in the query?
+	  	// Do we need this?  What is the logic here?
 	  	if c == '$' {
 	      if sp - 2 < I.END_POS {
 	          I.OCC[byte(c)][sp - 1 - 1] = 0
@@ -143,10 +147,11 @@ func (I *FMindex) Search(pattern []byte) {
 	          I.OCC[byte(c)][ep - 1] = 1
 	      }
 	  }
+
 	  sp = I.C[byte(c)] + I.OCC[byte(c)][sp - 1]
 	  ep = I.C[byte(c)] + I.OCC[byte(c)][ep] - 1
 	  i--
-	  fmt.Println("\t", string(c), sp, ep)
+	  if Debug { fmt.Println("\t", string(c), sp, ep) }
 	}
 	if ep < sp || (ep==0 && sp==0){
 	  fmt.Print("0 occurence\n")
@@ -193,6 +198,7 @@ func print_byte_array(a []byte) {
 func main() {
 	var build_file = flag.String("build", "", "Specify a file, from which to build FM index.")
 	var load_file = flag.String("load", "", "Specify a file (saved FM index), from which to load.")
+	flag.BoolVar(&Debug, "debug", false, "Turn on debug mode.")
 	flag.Parse()
 
 	if *build_file != "" {
