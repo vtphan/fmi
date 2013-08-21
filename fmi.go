@@ -13,6 +13,7 @@ import (
 	"flag"
 	"log"
 	"bufio"
+	"runtime"
 )
 
 var Debug bool
@@ -124,7 +125,7 @@ func (I *FMindex) Load (file string) {
 	}
 }
 //-----------------------------------------------------------------------------
-func (I *FMindex) Search(pattern []byte) int {
+func (I *FMindex) Search(pattern []byte, result chan int) {
 	p := len(pattern)
 	c := pattern[p - 1]
 	sp := I.C[byte(c)]
@@ -153,9 +154,9 @@ func (I *FMindex) Search(pattern []byte) int {
 	  // if Debug { fmt.Println("\t", string(c), sp, ep) }
 	}
 	if ep < sp || (ep==0 && sp==0){
-	  return 0
+	  result <- 0
 	} else {
-	  return ep-sp+1
+	  result <- ep-sp+1
 	}
 }
 
@@ -215,10 +216,10 @@ func main() {
 	if *build_file != "" {
 		var idx FMindex
 		idx.Build(*build_file)
-		idx.show()
-		print_byte_array(SEQ)
-		print_byte_array(BWT)
-		fmt.Println(SA)
+		// idx.show()
+		// print_byte_array(SEQ)
+		// print_byte_array(BWT)
+		// fmt.Println(SA)
 	} else if *test {
 		var idx FMindex
 		idx.Load(os.Args[2])
@@ -226,14 +227,22 @@ func main() {
 		f, err := os.Open(os.Args[3])
 		if err != nil { panic("error opening file " + os.Args[3]) }
 		r := bufio.NewReader(f)
+
+		result := make(chan int)
+		runtime.GOMAXPROCS(4)
+
+		count := 0
 		for i:=0; ; i++ {
 			line, err := r.ReadBytes('\n')
 			if err != nil { break }
 			line = line[:len(line)-1]
 			if len(line) > 0 {
-				// fmt.Println(string(line), "\t", idx.Search(line))
-				fmt.Println("Query", i, "\t", idx.Search(line))
+				go idx.Search(line, result)
+				count++
 			}
+		}
+		for i:=0; i<count; i++ {
+			fmt.Printf("Query %d %d\n", i, <-result)
 		}
 		// pattern := []string{"q", "ad", "a", "b", "c", "r", "ab", "abra", "abr", "ra", "dabra"}
 		// for i:=0; i<len(pattern); i++ {
