@@ -94,36 +94,18 @@ func (I *FMindex) BuildIndex() {
 }
 
 //-----------------------------------------------------------------------------
-
-func (I *FMindex) Build (file string) {
-	byte_array, err := ioutil.ReadFile(file)
-	if err != nil {
-		panic(err)
-	}
-	SEQ = append(byte_array, byte('$'))
-	I.END_POS = build_bwt(file+".bwt")
-	I.BuildIndex()
-
+func (I *FMindex) Save(file string) {
 	// Encode the struct FMindex y using Gob, then store it into "CompressFMindex.dat"
 	var fout bytes.Buffer
 	enc := gob.NewEncoder(&fout)
-	err = enc.Encode(I)
+	err := enc.Encode(I)
 	if err != nil {
-	  log.Fatal("Build FM index; encode error:", err)
+	  log.Fatal("Save index; encode error:", err)
 	}
-	ioutil.WriteFile(file+".fm", fout.Bytes(), 0600)
-	fmt.Println("Save index to", file+".fm")
+	ioutil.WriteFile(file, fout.Bytes(), 0600)
+	fmt.Println("Save index to", file)
 }
 
-//-----------------------------------------------------------------------------
-func (I *FMindex) Load (file string) {
-	finOCC,errOCC := os.Open(file)
-	decOCC := gob.NewDecoder(finOCC)
-	errOCC = decOCC.Decode(I)
-	if errOCC != nil {
-		log.Fatal("Load FM index; decode error:", errOCC)
-	}
-}
 //-----------------------------------------------------------------------------
 func (I *FMindex) Search(pattern []byte, result chan int) {
 	p := len(pattern)
@@ -187,6 +169,33 @@ func (I *FMindex) show() {
 }
 
 //-----------------------------------------------------------------------------
+func Build (file string) *FMindex {
+	I := new(FMindex)
+
+	byte_array, err := ioutil.ReadFile(file)
+	if err != nil {
+		panic(err)
+	}
+	SEQ = append(byte_array, byte('$'))
+	I.END_POS = build_bwt(file+".bwt")
+	I.BuildIndex()
+	return I
+}
+
+//-----------------------------------------------------------------------------
+func Load (file string) *FMindex {
+	I := new(FMindex)
+
+	finOCC,errOCC := os.Open(file)
+	decOCC := gob.NewDecoder(finOCC)
+	errOCC = decOCC.Decode(I)
+	if errOCC != nil {
+		log.Fatal("Load FM index; decode error:", errOCC)
+	}
+	return I
+}
+
+//-----------------------------------------------------------------------------
 func print_byte_array(a []byte) {
 	for i := 0; i < len(a); i++ {
 		fmt.Printf("%c", a[i])
@@ -204,15 +213,14 @@ func main() {
 	flag.Parse()
 
 	if *build_file != "" {
-		var idx FMindex
-		idx.Build(*build_file)
+		idx := Build(*build_file)
+		idx.Save(*build_file + ".fm")
 		// idx.show()
 		// print_byte_array(SEQ)
 		// print_byte_array(BWT)
 		// fmt.Println(SA)
 	} else if *index_file!="" && *queries_file!="" {
-		var idx FMindex
-		idx.Load(*index_file)
+		idx := Load(*index_file)
 
 		f, err := os.Open(*queries_file)
 		if err != nil { panic("error opening file " + *queries_file) }
