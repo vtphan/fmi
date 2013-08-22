@@ -210,6 +210,7 @@ func Readln(r *bufio.Reader) (string, error) {
 func main() {
 	var build_file = flag.String("build", "", "Specify a file, from which to build FM index.")
 	var test = flag.Bool("test", false, "index.fm  queries.txt")
+	var workers = flag.Int("w", 1, "number of workers")
 	flag.BoolVar(&Debug, "debug", false, "Turn on debug mode.")
 	flag.Parse()
 
@@ -229,7 +230,7 @@ func main() {
 		r := bufio.NewReader(f)
 
 		result := make(chan int)
-		runtime.GOMAXPROCS(4)
+		runtime.GOMAXPROCS(*workers)
 
 		count := 0
 		for i:=0; ; i++ {
