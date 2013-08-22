@@ -195,18 +195,6 @@ func print_byte_array(a []byte) {
 }
 
 //-----------------------------------------------------------------------------
-func Readln(r *bufio.Reader) (string, error) {
-  var (
-  		// isPrefix bool = true
-      err error = nil
-      line, ln []byte
-     )
-      line, _, err = r.ReadLine()
-      ln = append(ln, line...)
-  return string(ln),err
-}
-
-//-----------------------------------------------------------------------------
 func main() {
 	var build_file = flag.String("build", "", "Specify a file, from which to build FM index.")
 	var index_file = flag.String("i", "", "index file")
@@ -214,9 +202,6 @@ func main() {
 	var workers = flag.Int("w", 1, "number of workers")
 	flag.BoolVar(&Debug, "debug", false, "Turn on debug mode.")
 	flag.Parse()
-
-	fmt.Println("worker", *workers)
-	fmt.Println("debug", Debug)
 
 	if *build_file != "" {
 		var idx FMindex
@@ -249,10 +234,6 @@ func main() {
 		for i:=0; i<count; i++ {
 			fmt.Printf("Query %d %d\n", i, <-result)
 		}
-		// pattern := []string{"q", "ad", "a", "b", "c", "r", "ab", "abra", "abr", "ra", "dabra"}
-		// for i:=0; i<len(pattern); i++ {
-		//   fmt.Print(pattern[i],"\t", idx.Search([]byte(pattern[i])), "\n")
-		// }
 	}
 
 }
