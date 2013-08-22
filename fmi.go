@@ -115,24 +115,8 @@ func (I *FMindex) Search(pattern []byte, result chan int) {
 	// if Debug { fmt.Println("pattern: ", string(pattern), "\n\t", string(c), sp, ep) }
 	for i:= p-1; i > 0 && sp <= ep; i-- {
 	  	c = pattern[i - 1]
-
-	  	// Can we assume '$' is not in the query?
-	  	// Do we need this?  What is the logic here?
-	  // 	if c == '$' {
-	  //     if sp - 2 < I.END_POS {
-	  //         I.OCC[byte(c)][sp - 1 - 1] = 0
-	  //     } else {
-	  //         I.OCC[byte(c)][sp - 1 - 1] = 1
-	  //     }
-	  //     if ep - 1 < I.END_POS {
-	  //         I.OCC[byte(c)][ep - 1] = 0
-	  //     } else {
-	  //         I.OCC[byte(c)][ep - 1] = 1
-	  //     }
-	  // }
-
-	  sp = I.C[byte(c)] + I.OCC[byte(c)][sp - 1]
-	  ep = I.C[byte(c)] + I.OCC[byte(c)][ep] - 1
+		sp = I.C[byte(c)] + I.OCC[byte(c)][sp - 1]
+		ep = I.C[byte(c)] + I.OCC[byte(c)][ep] - 1
 	  // if Debug { fmt.Println("\t", string(c), sp, ep) }
 	}
 	if ep < sp || (ep==0 && sp==0){
@@ -220,21 +204,19 @@ func main() {
 		// print_byte_array(BWT)
 		// fmt.Println(SA)
 	} else if *index_file!="" && *queries_file!="" {
+		result := make(chan int)
+		runtime.GOMAXPROCS(*workers)
 		idx := Load(*index_file)
 
 		f, err := os.Open(*queries_file)
 		if err != nil { panic("error opening file " + *queries_file) }
 		r := bufio.NewReader(f)
-
-		result := make(chan int)
-		runtime.GOMAXPROCS(*workers)
-
 		count := 0
-		for i:=0; ; i++ {
+		for {
 			line, err := r.ReadBytes('\n')
 			if err != nil { break }
-			line = line[:len(line)-1]
-			if len(line) > 0 {
+			if len(line) > 1 {
+				line = line[0:len(line)-1]
 				go idx.Search(line, result)
 				count++
 			}
