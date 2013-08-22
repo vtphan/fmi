@@ -209,10 +209,14 @@ func Readln(r *bufio.Reader) (string, error) {
 //-----------------------------------------------------------------------------
 func main() {
 	var build_file = flag.String("build", "", "Specify a file, from which to build FM index.")
-	var test = flag.Bool("test", false, "index.fm  queries.txt")
+	var index_file = flag.String("i", "", "index file")
+	var queries_file = flag.String("q", "", "queries file")
 	var workers = flag.Int("w", 1, "number of workers")
 	flag.BoolVar(&Debug, "debug", false, "Turn on debug mode.")
 	flag.Parse()
+
+	fmt.Println("worker", *workers)
+	fmt.Println("debug", Debug)
 
 	if *build_file != "" {
 		var idx FMindex
@@ -221,12 +225,12 @@ func main() {
 		// print_byte_array(SEQ)
 		// print_byte_array(BWT)
 		// fmt.Println(SA)
-	} else if *test {
+	} else if *index_file!="" && *queries_file!="" {
 		var idx FMindex
-		idx.Load(os.Args[2])
+		idx.Load(*index_file)
 
-		f, err := os.Open(os.Args[3])
-		if err != nil { panic("error opening file " + os.Args[3]) }
+		f, err := os.Open(*queries_file)
+		if err != nil { panic("error opening file " + *queries_file) }
 		r := bufio.NewReader(f)
 
 		result := make(chan int)
