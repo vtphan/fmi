@@ -22,16 +22,18 @@ var Debug bool
 // Global variables: sequence (SEQ), suffix array (SA), BWT, FM index (C, OCC)
 //-----------------------------------------------------------------------------
 var SEQ []byte
-var BWT []byte
-var Freq map[byte]int  // Frequency of each symbol
 
 type Index struct{
+	SA []int 						// suffix array
 	C map[byte]int  				// count table
 	OCC map[byte][]int 			// occurence table
 	END_POS int 					// position of "$" in the text
 	SYMBOLS []int  				// sorted symbols
 	EP map[byte]int 				// ending row/position of each symbol
-	SA []int 						// suffix array
+
+	// un-exported variables
+	bwt []byte
+	freq map[byte]int  // Frequency of each symbol
 }
 //
 //-----------------------------------------------------------------------------
@@ -44,23 +46,23 @@ func (s BySuffix) Less(i, j int) bool { return (bytes.Compare(SEQ[s[i]:], SEQ[s[
 //-----------------------------------------------------------------------------
 // BWT is saved into a separate file
 func (I *Index) BuildSA_BWT(file string) {
-	Freq = make(map[byte]int)
+	I.freq = make(map[byte]int)
 	I.SA = make([]int, len(SEQ))
 	for i := 0; i < len(SEQ); i++ {
 		I.SA[i] = i
-		Freq[SEQ[i]]++
+		I.freq[SEQ[i]]++
 	}
 	sort.Sort(BySuffix(I.SA))
 
-	BWT = make([]byte, len(SEQ))
+	I.bwt = make([]byte, len(SEQ))
 	for i := 0; i < len(I.SA); i++ {
-		BWT[i] = SEQ[(len(SEQ)+I.SA[i]-1)%len(SEQ)]
-		if BWT[i] == '$' {
+		I.bwt[i] = SEQ[(len(SEQ)+I.SA[i]-1)%len(SEQ)]
+		if I.bwt[i] == '$' {
 			I.END_POS = i
 		}
 	}
-	ioutil.WriteFile(file, BWT, 0644)
-	fmt.Println("Save BWT to", file)
+	ioutil.WriteFile(file, I.bwt, 0644)
+	fmt.Println("Save I.bwt to", file)
 }
 
 //-----------------------------------------------------------------------------
@@ -69,7 +71,7 @@ func (I *Index) BuildIndex() {
 	I.OCC = make(map[byte][]int)
 	I.EP = make(map[byte]int)
 
-	for c := range Freq {
+	for c := range I.freq {
 		I.SYMBOLS = append(I.SYMBOLS, int(c))
 		I.OCC[c] = make([]int, len(SEQ))
 		I.C[c] = 0
@@ -77,12 +79,12 @@ func (I *Index) BuildIndex() {
 	sort.Ints(I.SYMBOLS)
 	for i := 1; i < len(I.SYMBOLS); i++ {
 		curr_c, prev_c := byte(I.SYMBOLS[i]), byte(I.SYMBOLS[i-1])
-		I.C[curr_c] = I.C[prev_c] + Freq[prev_c]
-		I.EP[curr_c] = I.C[curr_c] + Freq[curr_c] - 1
+		I.C[curr_c] = I.C[prev_c] + I.freq[prev_c]
+		I.EP[curr_c] = I.C[curr_c] + I.freq[curr_c] - 1
 	}
 
-	for i := 0; i < len(BWT); i++ {
-		I.OCC[BWT[i]][i] = 1
+	for i := 0; i < len(I.bwt); i++ {
+		I.OCC[I.bwt[i]][i] = 1
 		if i > 0 {
 			for symbol := range I.OCC {
 				I.OCC[symbol][i] += I.OCC[symbol][i-1]
@@ -147,8 +149,8 @@ func (I *Index) r_substr(r int, l int) []byte {
 	var s = make([]byte, l)
 	var i int
 	for i = l - 1; (i >= 0) && (r != I.END_POS); i-- {
-		s[i] = BWT[r]
-		r = (I.C[BWT[r]] + I.OCC[BWT[r]][r]) - 1 // substract 1 because index starts from 0
+		s[i] = I.bwt[r]
+		r = (I.C[I.bwt[r]] + I.OCC[I.bwt[r]][r]) - 1 // substract 1 because index starts from 0
 	}
 	if i < 0 {
 		return s
@@ -221,11 +223,9 @@ func main() {
 		// idx.show()
 		// print_byte_array(SEQ)
 		// print_byte_array(BWT)
-		// fmt.Println(SA)
 	} else if *index_file!="" && *queries_file!="" {
 		result := make(chan []int, 100000)
 		runtime.GOMAXPROCS(*workers)
-
 		idx := Load(*index_file)
 
 		f, err := os.Open(*queries_file)
