@@ -1,4 +1,3 @@
-q
 ad
 a
 b
@@ -9,9 +8,4 @@ abra
 abr
 ra
 dabra
-aqa
-z
-yz
 cadab
-$
-$$
