@@ -32,6 +32,7 @@ type FMindex struct{
 	END_POS int // position of "$" in the text
 	SYMBOLS []int  // sorted symbols
 	EP map[byte]int // ending row/position of each symbol
+	SA []int
 }
 //
 //-----------------------------------------------------------------------------
@@ -90,7 +91,9 @@ func (I *FMindex) BuildIndex() {
 			}
 		}
 	}
+	I.SYMBOLS = I.SYMBOLS[1:]
 	delete(I.OCC, '$')
+	delete(I.C, '$')
 }
 
 //-----------------------------------------------------------------------------
@@ -107,22 +110,39 @@ func (I *FMindex) Save(file string) {
 }
 
 //-----------------------------------------------------------------------------
-func (I *FMindex) Search(pattern []byte, result chan int) {
+func (I *FMindex) Search(pattern []byte, result chan []int) {
+	var sp, ep, offset int
+	var ok bool
+
 	p := len(pattern)
 	c := pattern[p - 1]
-	sp := I.C[byte(c)]
-	ep := I.EP[byte(c)]
+	sp, ok = I.C[byte(c)]
+	if ! ok {
+		result <- make([]int, 0)
+		return
+	}
+	ep = I.EP[byte(c)]
 	// if Debug { fmt.Println("pattern: ", string(pattern), "\n\t", string(c), sp, ep) }
 	for i:= p-1; i > 0 && sp <= ep; i-- {
-	  	c = pattern[i - 1]
-		sp = I.C[byte(c)] + I.OCC[byte(c)][sp - 1]
-		ep = I.C[byte(c)] + I.OCC[byte(c)][ep] - 1
-	  // if Debug { fmt.Println("\t", string(c), sp, ep) }
+  		c = pattern[i - 1]
+  		offset, ok = I.C[byte(c)]
+  		if ok {
+			sp = offset + I.OCC[byte(c)][sp - 1]
+			ep = offset + I.OCC[byte(c)][ep] - 1
+		} else {
+			result <- make([]int, 0)
+			return
+		}
+  		// if Debug { fmt.Println("\t", string(c), sp, ep) }
 	}
-	if ep < sp || (ep==0 && sp==0){
-	  result <- 0
+	if ep < sp {
+	  result <- make([]int, 0)
 	} else {
-	  result <- ep-sp+1
+		res := make([]int, ep-sp+1)
+		for i:=sp; i<=ep; i++ {
+			res[i-sp] = I.SA[i]
+		}
+	 	result <- res
 	}
 }
 
@@ -150,9 +170,13 @@ func (I *FMindex) show() {
 		c := byte(I.SYMBOLS[i])
 		fmt.Printf("%c%8d  %d\n", c, I.C[c], I.OCC[c])
 	}
+	fmt.Println(I.SYMBOLS)
 }
 
+
 //-----------------------------------------------------------------------------
+// Build FM index given the file storing the text.
+// Usage:	idx := Build(text_file)
 func Build (file string) *FMindex {
 	I := new(FMindex)
 
@@ -162,11 +186,14 @@ func Build (file string) *FMindex {
 	}
 	SEQ = append(byte_array, byte('$'))
 	I.END_POS = build_bwt(file+".bwt")
+	I.SA = SA
 	I.BuildIndex()
 	return I
 }
 
 //-----------------------------------------------------------------------------
+// Load FM index
+// Usage:  idx := Load(index_file)
 func Load (file string) *FMindex {
 	I := new(FMindex)
 
@@ -204,7 +231,7 @@ func main() {
 		// print_byte_array(BWT)
 		// fmt.Println(SA)
 	} else if *index_file!="" && *queries_file!="" {
-		result := make(chan int)
+		result := make(chan []int)
 		runtime.GOMAXPROCS(*workers)
 		idx := Load(*index_file)
 
