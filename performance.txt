@@ -8,3 +8,7 @@ index size: 94MB
 time go run fmi.go --build NC_008253_processed: 12.57s
 time go run fmi.go -i NC_008253_processed.fm -q reads_processed -w 4 > output.txt: 6.45s
 
+Platform: delphinus
+index size: 94MB
+time ./fmi -build Benchmark/NC_008253_processed: 12.02s
+time ./fmi -i Benchmark/NC_008253_processed.fm -q Benchmark/reads_processed -w 8 > output.txt: 3.81s
