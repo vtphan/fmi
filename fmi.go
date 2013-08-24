@@ -110,7 +110,7 @@ func (I *FMindex) Save(file string) {
 }
 
 //-----------------------------------------------------------------------------
-func (I *FMindex) Search(pattern []byte, result chan []int) {
+func (I *FMindex) Search(pattern []byte, result chan int) {
 	var sp, ep, offset int
 	var ok bool
 
@@ -118,7 +118,8 @@ func (I *FMindex) Search(pattern []byte, result chan []int) {
 	c := pattern[p - 1]
 	sp, ok = I.C[byte(c)]
 	if ! ok {
-		result <- make([]int, 0)
+		// result <- make([]int, 0)
+		result <- 0
 		return
 	}
 	ep = I.EP[byte(c)]
@@ -130,19 +131,22 @@ func (I *FMindex) Search(pattern []byte, result chan []int) {
 			sp = offset + I.OCC[byte(c)][sp - 1]
 			ep = offset + I.OCC[byte(c)][ep] - 1
 		} else {
-			result <- make([]int, 0)
+			// result <- make([]int, 0)
+			result <- 0
 			return
 		}
   		// if Debug { fmt.Println("\t", string(c), sp, ep) }
 	}
 	if ep < sp {
-	  result <- make([]int, 0)
+	  	// result <- make([]int, 0)
+	  	result <- 0
 	} else {
-		res := make([]int, ep-sp+1)
-		for i:=sp; i<=ep; i++ {
-			res[i-sp] = I.SA[i]
-		}
-	 	result <- res
+		result <- ep-sp+1
+		// res := make([]int, ep-sp+1)
+		// for i:=sp; i<=ep; i++ {
+		// 	res[i-sp] = I.SA[i]
+		// }
+	 // 	result <- res
 	}
 }
 
@@ -231,7 +235,7 @@ func main() {
 		// print_byte_array(BWT)
 		// fmt.Println(SA)
 	} else if *index_file!="" && *queries_file!="" {
-		result := make(chan []int)
+		result := make(chan int)
 		runtime.GOMAXPROCS(*workers)
 		idx := Load(*index_file)
 
