@@ -1,9 +1,9 @@
 Text:    NC_008253_processed
 Reads:   reads_processed
-Platform: macbook pro
 ===========================================================
 8/24/2013
 commit e64ce38fdb029a80796d49ec546e7d5b1a58764e
+Platform: macbook pro
 index size: 94MB
 time go run fmi.go --build NC_008253_processed: 12.57s
 time go run fmi.go -i NC_008253_processed.fm -q reads_processed -w 4 > output.txt: 6.45s
