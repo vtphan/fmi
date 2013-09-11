@@ -213,7 +213,7 @@ func _load_occ(filename string, Len int) []int {
 	decOCC := gob.NewDecoder(fin)
 	err = decOCC.Decode(&thing)
 	if err != nil {
-		log.Fatal("Load error:", filename, err)
+		log.Fatal("Error loading occ table:", filename, err)
 	}
 	return thing
 	// fmt.Println(thing[key], key)
