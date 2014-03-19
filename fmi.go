@@ -29,12 +29,10 @@ type Index struct{
 	OCC map[byte][]uint32 			// occurence table
 
 	END_POS uint32 					// position of "$" in the text
-	SYMBOLS []int  				// sorted symbols
+	SYMBOLS []int  					// sorted symbols
 	EP map[byte]uint32 				// ending row/position of each symbol
 
 	LEN uint32
-	// un-exported variables
-	bwt []byte
 	freq map[byte]uint32  // Frequency of each symbol
 }
 //
@@ -52,8 +50,8 @@ func (s BySuffix) Less(i, j int) bool { return (bytes.Compare(SEQ[s[i]:], SEQ[s[
 func New (file string) *Index {
 	I := new(Index)
 	ReadSequence(file)
-	I.BuildSA_BWT()
-	I.BuildIndex()
+	I.build_suffix_array()
+	I.build_bwt_fmindex()
 	return I
 }
 
@@ -128,45 +126,47 @@ func (I *Index) Save(file string) {
 }
 //-----------------------------------------------------------------------------
 // BWT is saved into a separate file
-func (I *Index) BuildSA_BWT() {
+func (I *Index) build_suffix_array() {
 	I.LEN = uint32(len(SEQ))
-	I.freq = make(map[byte]uint32)
+	// I.SA = qsufsort(SEQ)
 	I.SA = make([]uint32, I.LEN)
-	I.bwt = make([]byte, I.LEN)
-	I.C = make(map[byte]uint32)
-	I.OCC = make(map[byte][]uint32)
-	I.EP = make(map[byte]uint32)
 	var i uint32
 	for i = 0; i < I.LEN; i++ {
 		I.SA[i] = i
-		I.freq[SEQ[i]]++
 	}
+	sort.Sort(BySuffix(I.SA))
+}
+
+//-----------------------------------------------------------------------------
+func (I *Index) build_bwt_fmindex() {
+	I.freq = make(map[byte]uint32)
+	bwt := make([]byte, I.LEN)
+	var i uint32
+	for i = 0; i < I.LEN; i++ {
+		I.freq[SEQ[i]]++
+		bwt[i] = SEQ[(I.LEN+I.SA[i]-1)%I.LEN]
+		if bwt[i] == '$' {
+			I.END_POS = i
+		}
+	}
+
+	I.C = make(map[byte]uint32)
+	I.OCC = make(map[byte][]uint32)
 	for c := range I.freq {
 		I.SYMBOLS = append(I.SYMBOLS, int(c))
 		I.OCC[c] = make([]uint32, I.LEN)
 		I.C[c] = 0
 	}
 	sort.Ints(I.SYMBOLS)
-	sort.Sort(BySuffix(I.SA))
-
-	for i = 0; i < I.LEN; i++ {
-		I.bwt[i] = SEQ[(I.LEN+I.SA[i]-1)%I.LEN]
-		if I.bwt[i] == '$' {
-			I.END_POS = i
-		}
-	}
-}
-
-//-----------------------------------------------------------------------------
-func (I *Index) BuildIndex() {
+	I.EP = make(map[byte]uint32)
 	for i := 1; i < len(I.SYMBOLS); i++ {
 		curr_c, prev_c := byte(I.SYMBOLS[i]), byte(I.SYMBOLS[i-1])
 		I.C[curr_c] = I.C[prev_c] + I.freq[prev_c]
 		I.EP[curr_c] = I.C[curr_c] + I.freq[curr_c] - 1
 	}
 
-	for i := 0; i < len(I.bwt); i++ {
-		I.OCC[I.bwt[i]][i] = 1
+	for i := 0; i < len(bwt); i++ {
+		I.OCC[bwt[i]][i] = 1
 		if i > 0 {
 			for symbol := range I.OCC {
 				I.OCC[symbol][i] += I.OCC[symbol][i-1]
@@ -240,18 +240,6 @@ func (I *Index) Repeat(j, read_len uint32) []uint32 {
  	return res
 }
 
-
-//-----------------------------------------------------------------------------
-func (I *Index) show() {
-	fmt.Printf(" %8s  OCC\n", "C")
-	for i := 0; i < len(I.SYMBOLS); i++ {
-		c := byte(I.SYMBOLS[i])
-		fmt.Printf("%c%8d  %d\n", c, I.C[c], I.OCC[c])
-	}
-	fmt.Println(I.SYMBOLS)
-}
-
-
 //-----------------------------------------------------------------------------
 func ReadSequence(file string) {
    f, err := os.Open(file)
@@ -279,6 +267,17 @@ func ReadSequence(file string) {
 	}
 }
 
+
+
+//-----------------------------------------------------------------------------
+func (I *Index) show() {
+	fmt.Printf(" %8s  OCC\n", "C")
+	for i := 0; i < len(I.SYMBOLS); i++ {
+		c := byte(I.SYMBOLS[i])
+		fmt.Printf("%c%8d  %d\n", c, I.C[c], I.OCC[c])
+	}
+	fmt.Println(I.SYMBOLS)
+}
 
 //-----------------------------------------------------------------------------
 func print_byte_array(a []byte) {

@@ -31,6 +31,7 @@ func main() {
       if err != nil { panic("error opening file " + *queries_file) }
       r := bufio.NewReader(f)
       var result []uint32
+      // var result []int
       for {
          line, err := r.ReadBytes('\n')
          if err != nil { break }
