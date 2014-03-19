@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"os"
 	"sort"
-	"flag"
 	"log"
 	"encoding/gob"
 	"bufio"
