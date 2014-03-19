@@ -182,19 +182,19 @@ func (I *Index) BuildIndex() {
 // Search for all occurences of SEQ[j:j+read_len] in SEQ
 //-----------------------------------------------------------------------------
 
-func (I *Index) Search(j uint32, read_len uint32) []uint32 {
+func (I *Index) Search(pattern []byte) []uint32 {
 	var sp, ep, offset uint32
 	var ok bool
 
-	c := SEQ[j+read_len-1]
+	c := pattern[len(pattern) - 1]
 	sp, ok = I.C[c]
 	if ! ok {
 		return make([]uint32, 0)
 	}
 	ep = I.EP[c]
 	// if Debug { fmt.Println("pattern: ", string(pattern), "\n\t", string(c), sp, ep) }
-	for i:=int(read_len-2); sp <= ep && i >= 0; i-- {
-  		c = SEQ[j+uint32(i)]
+	for i:= uint32(len(pattern)-2); sp <= ep && i >= 0; i-- {
+  		c = pattern[i]
   		offset, ok = I.C[c]
   		if ok {
 			sp = offset + I.OCC[c][sp - 1]
