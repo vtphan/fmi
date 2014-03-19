@@ -1,12 +1,3 @@
-Usage
-(1) Build index; takes a file containing the text, builds and saves index to file named text_file.fm
-	go run fmi.go --build text_file  [--debug]
-	
-(2) Load index; takes an index file, loads it.
-	go run fmi.go -i index_dir -q queries_file  [-w n] [--debug]
+FM Index
 
-	Note: w = number of workers/processes
-
-Example:
-go run fmi.go --build test.txt
-go run fmi.go -i test.txt.index -q queries.txt
+Install: go get github.com/vtphan/fmi
