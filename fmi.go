@@ -179,7 +179,7 @@ func (I *Index) BuildIndex() {
 }
 
 //-----------------------------------------------------------------------------
-// Search for all occurences of SEQ[j:j+read_len] in SEQ
+// Search for all occurences of pattern in SEQ
 //-----------------------------------------------------------------------------
 
 func (I *Index) Search(pattern []byte) []uint32 {
@@ -192,9 +192,8 @@ func (I *Index) Search(pattern []byte) []uint32 {
 		return make([]uint32, 0)
 	}
 	ep = I.EP[c]
-	// if Debug { fmt.Println("pattern: ", string(pattern), "\n\t", string(c), sp, ep) }
-	for i:= uint32(len(pattern)-2); sp <= ep && i >= 0; i-- {
-  		c = pattern[i]
+	for i:= len(pattern)-2; sp <= ep && i >= 0; i-- {
+  		c = pattern[uint32(i)]
   		offset, ok = I.C[c]
   		if ok {
 			sp = offset + I.OCC[c][sp - 1]
@@ -202,7 +201,6 @@ func (I *Index) Search(pattern []byte) []uint32 {
 		} else {
 			return make([]uint32, 0)
 		}
-  		// if Debug { fmt.Println("\t", string(c), sp, ep) }
 	}
 	res := make([]uint32, ep-sp+1)
 	for k:=sp; k<=ep; k++ {
@@ -210,6 +208,38 @@ func (I *Index) Search(pattern []byte) []uint32 {
 	}
  	return res
 }
+
+//-----------------------------------------------------------------------------
+// Search for all repeats of SEQ[j:j+read_len] in SEQ
+//-----------------------------------------------------------------------------
+
+func (I *Index) Repeat(j, read_len uint32) []uint32 {
+	var sp, ep, offset uint32
+	var ok bool
+
+	c := SEQ[j+read_len-1]
+	sp, ok = I.C[c]
+	if ! ok {
+		return make([]uint32, 0)
+	}
+	ep = I.EP[c]
+	for i:=int(read_len-2); sp <= ep && i >= 0; i-- {
+  		c = SEQ[j+uint32(i)]
+  		offset, ok = I.C[c]
+  		if ok {
+			sp = offset + I.OCC[c][sp - 1]
+			ep = offset + I.OCC[c][ep] - 1
+		} else {
+			return make([]uint32, 0)
+		}
+	}
+	res := make([]uint32, ep-sp+1)
+	for k:=sp; k<=ep; k++ {
+		res[k-sp] = I.SA[k]
+	}
+ 	return res
+}
+
 
 //-----------------------------------------------------------------------------
 func (I *Index) show() {
