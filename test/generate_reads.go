@@ -53,7 +53,7 @@ func random_error(base byte) byte {
 //-----------------------------------------------------------------------------
 // return true if SEQ[pos: pos+length] is NNNNNNNNNNNN
 
-func justN(pos, read_len uint32) bool {
+func justN(pos, read_len int) bool {
    for i:=pos; i<pos+read_len; i++ {
       if fmi.SEQ[pos] != 'N' {
          return false
@@ -72,18 +72,18 @@ func main() {
 	var error_rate = flag.Float64("e", 0.01, "Error rate.")
 	flag.BoolVar(&Debug, "debug", false, "Turn on debug mode.")
 	flag.Parse()
-	read_len := uint32(*rl)
+	read_len := int(*rl)
 	if *seq_file != "" {
 		if *coverage > 0 && read_len > 0 {
 			idx := fmi.New(*seq_file)
          num_of_reads := int(*coverage * float64(idx.LEN) / float64(read_len))
-			read_indices := make([]uint32, num_of_reads)
+			read_indices := make([]int, num_of_reads)
 			the_read := make([]byte, read_len)
-         var rand_pos uint32
+         var rand_pos int
 
 			for i:=0; i<num_of_reads; i++ {
-            rand_pos = uint32(rand_gen.Intn(int(idx.LEN - read_len)))
-            if justN(rand_pos, uint32(read_len)) {
+            rand_pos = int(rand_gen.Intn(int(idx.LEN - read_len)))
+            if justN(rand_pos, int(read_len)) {
                i--
                continue
             }
