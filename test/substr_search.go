@@ -30,14 +30,12 @@ func main() {
       f, err := os.Open(*queries_file)
       if err != nil { panic("error opening file " + *queries_file) }
       r := bufio.NewReader(f)
-      var result []uint32
-      // var result []int
       for {
          line, err := r.ReadBytes('\n')
          if err != nil { break }
          if len(line) > 1 {
             line = line[0:len(line)-1]
-            result = idx.Search(line)
+            result := idx.Search(line)
             if len(result) == 0 {
                fmt.Println("na")
             } else {

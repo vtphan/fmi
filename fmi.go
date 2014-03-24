@@ -24,20 +24,20 @@ var Debug bool
 var SEQ []byte
 
 type Index struct{
-	SA []uint32 						// suffix array
-	C map[byte]uint32  				// count table
-	OCC map[byte][]uint32 			// occurence table
+	SA []int 						// suffix array
+	C map[byte]int  				// count table
+	OCC map[byte][]int 			// occurence table
 
-	END_POS uint32 					// position of "$" in the text
+	END_POS int 					// position of "$" in the text
 	SYMBOLS []int  					// sorted symbols
-	EP map[byte]uint32 				// ending row/position of each symbol
+	EP map[byte]int 				// ending row/position of each symbol
 
-	LEN uint32
-	freq map[byte]uint32  // Frequency of each symbol
+	LEN int
+	freq map[byte]int  // Frequency of each symbol
 }
 //
 //-----------------------------------------------------------------------------
-type BySuffix []uint32
+type BySuffix []int
 
 func (s BySuffix) Len() int { return len(s) }
 func (s BySuffix) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
@@ -77,8 +77,8 @@ func _load(thing interface{}, filename string) {
 }
 
 //-----------------------------------------------------------------------------
-func _load_occ(filename string, Len uint32) []uint32 {
-	thing := make([]uint32, Len)
+func _load_occ(filename string, Len int) []int {
+	thing := make([]int, Len)
 	fin,err := os.Open(filename)
 	decOCC := gob.NewDecoder(fin)
 	err = decOCC.Decode(&thing)
@@ -101,7 +101,7 @@ func Load (dir string) *Index {
 	_load(&I.EP, path.Join(dir, "ep"))
 	_load(&I.LEN, path.Join(dir, "len"))
 
-	I.OCC = make(map[byte][]uint32)
+	I.OCC = make(map[byte][]int)
 	for _,symb := range I.SYMBOLS {
 		I.OCC[byte(symb)] = _load_occ(path.Join(dir, "occ."+string(symb)), I.LEN)
 	}
@@ -127,21 +127,21 @@ func (I *Index) Save(file string) {
 //-----------------------------------------------------------------------------
 // BWT is saved into a separate file
 func (I *Index) build_suffix_array() {
-	I.LEN = uint32(len(SEQ))
-	// I.SA = qsufsort(SEQ)
-	I.SA = make([]uint32, I.LEN)
-	var i uint32
-	for i = 0; i < I.LEN; i++ {
-		I.SA[i] = i
-	}
-	sort.Sort(BySuffix(I.SA))
+	I.LEN = int(len(SEQ))
+	I.SA = qsufsort(SEQ)
+	// I.SA = make([]int, I.LEN)
+	// var i int
+	// for i = 0; i < I.LEN; i++ {
+	// 	I.SA[i] = i
+	// }
+	// sort.Sort(BySuffix(I.SA))
 }
 
 //-----------------------------------------------------------------------------
 func (I *Index) build_bwt_fmindex() {
-	I.freq = make(map[byte]uint32)
+	I.freq = make(map[byte]int)
 	bwt := make([]byte, I.LEN)
-	var i uint32
+	var i int
 	for i = 0; i < I.LEN; i++ {
 		I.freq[SEQ[i]]++
 		bwt[i] = SEQ[(I.LEN+I.SA[i]-1)%I.LEN]
@@ -150,15 +150,15 @@ func (I *Index) build_bwt_fmindex() {
 		}
 	}
 
-	I.C = make(map[byte]uint32)
-	I.OCC = make(map[byte][]uint32)
+	I.C = make(map[byte]int)
+	I.OCC = make(map[byte][]int)
 	for c := range I.freq {
 		I.SYMBOLS = append(I.SYMBOLS, int(c))
-		I.OCC[c] = make([]uint32, I.LEN)
+		I.OCC[c] = make([]int, I.LEN)
 		I.C[c] = 0
 	}
 	sort.Ints(I.SYMBOLS)
-	I.EP = make(map[byte]uint32)
+	I.EP = make(map[byte]int)
 	for i := 1; i < len(I.SYMBOLS); i++ {
 		curr_c, prev_c := byte(I.SYMBOLS[i]), byte(I.SYMBOLS[i-1])
 		I.C[curr_c] = I.C[prev_c] + I.freq[prev_c]
@@ -182,27 +182,27 @@ func (I *Index) build_bwt_fmindex() {
 // Search for all occurences of pattern in SEQ
 //-----------------------------------------------------------------------------
 
-func (I *Index) Search(pattern []byte) []uint32 {
-	var sp, ep, offset uint32
+func (I *Index) Search(pattern []byte) []int {
+	var sp, ep, offset int
 	var ok bool
 
 	c := pattern[len(pattern) - 1]
 	sp, ok = I.C[c]
 	if ! ok {
-		return make([]uint32, 0)
+		return make([]int, 0)
 	}
 	ep = I.EP[c]
 	for i:= len(pattern)-2; sp <= ep && i >= 0; i-- {
-  		c = pattern[uint32(i)]
+  		c = pattern[int(i)]
   		offset, ok = I.C[c]
   		if ok {
 			sp = offset + I.OCC[c][sp - 1]
 			ep = offset + I.OCC[c][ep] - 1
 		} else {
-			return make([]uint32, 0)
+			return make([]int, 0)
 		}
 	}
-	res := make([]uint32, ep-sp+1)
+	res := make([]int, ep-sp+1)
 	for k:=sp; k<=ep; k++ {
 		res[k-sp] = I.SA[k]
 	}
@@ -213,27 +213,27 @@ func (I *Index) Search(pattern []byte) []uint32 {
 // Search for all repeats of SEQ[j:j+read_len] in SEQ
 //-----------------------------------------------------------------------------
 
-func (I *Index) Repeat(j, read_len uint32) []uint32 {
-	var sp, ep, offset uint32
+func (I *Index) Repeat(j, read_len int) []int {
+	var sp, ep, offset int
 	var ok bool
 
 	c := SEQ[j+read_len-1]
 	sp, ok = I.C[c]
 	if ! ok {
-		return make([]uint32, 0)
+		return make([]int, 0)
 	}
 	ep = I.EP[c]
 	for i:=int(read_len-2); sp <= ep && i >= 0; i-- {
-  		c = SEQ[j+uint32(i)]
+  		c = SEQ[j+int(i)]
   		offset, ok = I.C[c]
   		if ok {
 			sp = offset + I.OCC[c][sp - 1]
 			ep = offset + I.OCC[c][ep] - 1
 		} else {
-			return make([]uint32, 0)
+			return make([]int, 0)
 		}
 	}
-	res := make([]uint32, ep-sp+1)
+	res := make([]int, ep-sp+1)
 	for k:=sp; k<=ep; k++ {
 		res[k-sp] = I.SA[k]
 	}
