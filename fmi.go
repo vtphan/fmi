@@ -36,13 +36,6 @@ type Index struct{
 	freq map[byte]int  // Frequency of each symbol
 }
 //
-//-----------------------------------------------------------------------------
-type BySuffix []int
-
-func (s BySuffix) Len() int { return len(s) }
-func (s BySuffix) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-func (s BySuffix) Less(i, j int) bool { return (bytes.Compare(SEQ[s[i]:], SEQ[s[j]:]) == -1) }
-
 
 //-----------------------------------------------------------------------------
 // Build FM index given the file storing the text.
@@ -129,12 +122,6 @@ func (I *Index) Save(file string) {
 func (I *Index) build_suffix_array() {
 	I.LEN = int(len(SEQ))
 	I.SA = qsufsort(SEQ)
-	// I.SA = make([]int, I.LEN)
-	// var i int
-	// for i = 0; i < I.LEN; i++ {
-	// 	I.SA[i] = i
-	// }
-	// sort.Sort(BySuffix(I.SA))
 }
 
 //-----------------------------------------------------------------------------
