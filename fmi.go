@@ -170,30 +170,37 @@ func (I *Index) build_bwt_fmindex() {
 //-----------------------------------------------------------------------------
 
 func (I *Index) Search(pattern []byte) []int {
-	var sp, ep, offset int
-	var ok bool
-
-	c := pattern[len(pattern) - 1]
-	sp, ok = I.C[c]
-	if ! ok {
-		return make([]int, 0)
-	}
-	ep = I.EP[c]
-	for i:= len(pattern)-2; sp <= ep && i >= 0; i-- {
-  		c = pattern[int(i)]
-  		offset, ok = I.C[c]
-  		if ok {
-			sp = offset + I.OCC[c][sp - 1]
-			ep = offset + I.OCC[c][ep] - 1
-		} else {
-			return make([]int, 0)
-		}
-	}
+   sp, ep, _ := I.SearchFrom(pattern, len(pattern)-1)
 	res := make([]int, ep-sp+1)
 	for k:=sp; k<=ep; k++ {
 		res[k-sp] = I.SA[k]
 	}
  	return res
+}
+
+//-----------------------------------------------------------------------------
+// Returns starting, ending positions (sp, ep) and last-matched position (i)
+//-----------------------------------------------------------------------------
+func (I *Index) SearchFrom(pattern []byte, start_pos int) (int, int, int) {
+   var offset, i int
+
+   c := pattern[start_pos]
+   sp, ok := I.C[c]
+   if ! ok {
+      return 0, -1, -1
+   }
+   ep := I.EP[c]
+   for i= start_pos-1; sp <= ep && i >= 0; i-- {
+      c = pattern[i]
+      offset, ok = I.C[c]
+      if ok {
+         sp = offset + I.OCC[c][sp - 1]
+         ep = offset + I.OCC[c][ep] - 1
+      } else {
+         return 0, -1, -1
+      }
+   }
+   return sp, ep, i+1
 }
 
 //-----------------------------------------------------------------------------
