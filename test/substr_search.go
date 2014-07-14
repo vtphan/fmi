@@ -26,7 +26,7 @@ func main() {
       idx.Save(*build_file)
    } else if *index_file!="" && *queries_file!="" {
       idx := fmi.Load(*index_file)
-
+      // fmt.Println("index", idx)
       f, err := os.Open(*queries_file)
       if err != nil { panic("error opening file " + *queries_file) }
       r := bufio.NewReader(f)

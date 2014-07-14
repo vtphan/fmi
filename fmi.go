@@ -24,16 +24,16 @@ var Debug bool
 var SEQ []byte
 
 type Index struct{
-	SA []int 						// suffix array
-	C map[byte]int  				// count table
-	OCC map[byte][]int 			// occurence table
+	SA []uint32 						// suffix array
+	C map[byte]uint32  				// count table
+	OCC map[byte][]uint32 			// occurence table
 
-	END_POS int 					// position of "$" in the text
+	END_POS uint32 					// position of "$" in the text
 	SYMBOLS []int  					// sorted symbols
-	EP map[byte]int 				// ending row/position of each symbol
+	EP map[byte]uint32 				// ending row/position of each symbol
 
-	LEN int
-	freq map[byte]int  // Frequency of each symbol
+	LEN uint32
+	freq map[byte]uint32          // Frequency of each symbol
 }
 //
 
@@ -70,8 +70,8 @@ func _load(thing interface{}, filename string) {
 }
 
 //-----------------------------------------------------------------------------
-func _load_occ(filename string, Len int) []int {
-	thing := make([]int, Len)
+func _load_occ(filename string, Len uint32) []uint32 {
+	thing := make([]uint32, Len)
 	fin,err := os.Open(filename)
 	decOCC := gob.NewDecoder(fin)
 	err = decOCC.Decode(&thing)
@@ -94,7 +94,7 @@ func Load (dir string) *Index {
 	_load(&I.EP, path.Join(dir, "ep"))
 	_load(&I.LEN, path.Join(dir, "len"))
 
-	I.OCC = make(map[byte][]int)
+	I.OCC = make(map[byte][]uint32)
 	for _,symb := range I.SYMBOLS {
 		I.OCC[byte(symb)] = _load_occ(path.Join(dir, "occ."+string(symb)), I.LEN)
 	}
@@ -120,15 +120,19 @@ func (I *Index) Save(file string) {
 //-----------------------------------------------------------------------------
 // BWT is saved into a separate file
 func (I *Index) build_suffix_array() {
-	I.LEN = int(len(SEQ))
-	I.SA = qsufsort(SEQ)
+	I.LEN = uint32(len(SEQ))
+	I.SA = make([]uint32, I.LEN)
+   SA := qsufsort(SEQ)
+   for i := range SA {
+      I.SA[i] = uint32(SA[i])
+   }
 }
 
 //-----------------------------------------------------------------------------
 func (I *Index) build_bwt_fmindex() {
-	I.freq = make(map[byte]int)
+	I.freq = make(map[byte]uint32)
 	bwt := make([]byte, I.LEN)
-	var i int
+	var i uint32
 	for i = 0; i < I.LEN; i++ {
 		I.freq[SEQ[i]]++
 		bwt[i] = SEQ[(I.LEN+I.SA[i]-1)%I.LEN]
@@ -137,32 +141,38 @@ func (I *Index) build_bwt_fmindex() {
 		}
 	}
 
-	I.C = make(map[byte]int)
-	I.OCC = make(map[byte][]int)
+	I.C = make(map[byte]uint32)
+	I.OCC = make(map[byte][]uint32)
 	for c := range I.freq {
 		I.SYMBOLS = append(I.SYMBOLS, int(c))
-		I.OCC[c] = make([]int, I.LEN)
+		I.OCC[c] = make([]uint32, I.LEN)
 		I.C[c] = 0
 	}
 	sort.Ints(I.SYMBOLS)
-	I.EP = make(map[byte]int)
-	for i := 1; i < len(I.SYMBOLS); i++ {
-		curr_c, prev_c := byte(I.SYMBOLS[i]), byte(I.SYMBOLS[i-1])
+	I.EP = make(map[byte]uint32)
+	for j := 1; j < len(I.SYMBOLS); j++ {
+		curr_c, prev_c := byte(I.SYMBOLS[j]), byte(I.SYMBOLS[j-1])
 		I.C[curr_c] = I.C[prev_c] + I.freq[prev_c]
 		I.EP[curr_c] = I.C[curr_c] + I.freq[curr_c] - 1
 	}
 
-	for i := 0; i < len(bwt); i++ {
-		I.OCC[bwt[i]][i] = 1
-		if i > 0 {
+	for j := 0; j < len(bwt); j++ {
+		I.OCC[bwt[j]][j] = 1
+		if j > 0 {
 			for symbol := range I.OCC {
-				I.OCC[symbol][i] += I.OCC[symbol][i-1]
+				I.OCC[symbol][j] += I.OCC[symbol][j-1]
 			}
 		}
 	}
 	I.SYMBOLS = I.SYMBOLS[1:]
 	delete(I.OCC, '$')
 	delete(I.C, '$')
+   delete(I.OCC, 'Y')
+   delete(I.C, 'Y')
+   delete(I.OCC, 'W')
+   delete(I.C, 'W')
+
+   fmt.Println(I)
 }
 
 //-----------------------------------------------------------------------------
@@ -173,7 +183,7 @@ func (I *Index) Search(pattern []byte) []int {
    sp, ep, _ := I.SearchFrom(pattern, len(pattern)-1)
 	res := make([]int, ep-sp+1)
 	for k:=sp; k<=ep; k++ {
-		res[k-sp] = I.SA[k]
+		res[k-sp] = int(I.SA[k])
 	}
  	return res
 }
@@ -182,7 +192,8 @@ func (I *Index) Search(pattern []byte) []int {
 // Returns starting, ending positions (sp, ep) and last-matched position (i)
 //-----------------------------------------------------------------------------
 func (I *Index) SearchFrom(pattern []byte, start_pos int) (int, int, int) {
-   var offset, i int
+   var offset uint32
+   var i int
 
    c := pattern[start_pos]
    sp, ok := I.C[c]
@@ -190,7 +201,7 @@ func (I *Index) SearchFrom(pattern []byte, start_pos int) (int, int, int) {
       return 0, -1, -1
    }
    ep := I.EP[c]
-   for i= start_pos-1; sp <= ep && i >= 0; i-- {
+   for i=int(start_pos-1); sp <= ep && i >= 0; i-- {
       c = pattern[i]
       offset, ok = I.C[c]
       if ok {
@@ -200,7 +211,7 @@ func (I *Index) SearchFrom(pattern []byte, start_pos int) (int, int, int) {
          return 0, -1, -1
       }
    }
-   return sp, ep, i+1
+   return int(sp), int(ep), i+1
 }
 
 //-----------------------------------------------------------------------------
@@ -208,7 +219,7 @@ func (I *Index) SearchFrom(pattern []byte, start_pos int) (int, int, int) {
 //-----------------------------------------------------------------------------
 
 func (I *Index) Repeat(j, read_len int) []int {
-	var sp, ep, offset int
+	var sp, ep, offset uint32
 	var ok bool
 
 	c := SEQ[j+read_len-1]
@@ -229,7 +240,7 @@ func (I *Index) Repeat(j, read_len int) []int {
 	}
 	res := make([]int, ep-sp+1)
 	for k:=sp; k<=ep; k++ {
-		res[k-sp] = I.SA[k]
+		res[k-sp] = int(I.SA[k])
 	}
  	return res
 }
@@ -259,6 +270,18 @@ func ReadSequence(file string) {
 		}
 		SEQ = append(bytes.Trim(byte_array, "\n\r "), byte('$'))
 	}
+
+   // replace N with Y and '*' with W
+   for i:=0; i<len(SEQ); i++ {
+      if SEQ[i] == 'N' {
+         SEQ[i] = 'Y'
+      } else if SEQ[i] == '*' {
+         SEQ[i] = 'W'
+      }
+      // } else if SEQ[i] != 'A' && SEQ[i] != 'C' && SEQ[i] != 'G' && SEQ[i] != 'T' {
+      //    panic("Sequence contains an illegal character: " + string(SEQ[i]))
+      // }
+   }
 }
 
 
