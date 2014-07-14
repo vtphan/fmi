@@ -271,16 +271,15 @@ func ReadSequence(file string) {
 		SEQ = append(bytes.Trim(byte_array, "\n\r "), byte('$'))
 	}
 
-   // replace N with Y and '*' with W
-   for i:=0; i<len(SEQ); i++ {
+   // replace N with Y and '*' with W (last character is '$')
+   for i:=0; i<len(SEQ)-1; i++ {
       if SEQ[i] == 'N' {
          SEQ[i] = 'Y'
       } else if SEQ[i] == '*' {
          SEQ[i] = 'W'
+      } else if SEQ[i] != 'A' && SEQ[i] != 'C' && SEQ[i] != 'G' && SEQ[i] != 'T' {
+         panic("Sequence contains an illegal character: " + string(SEQ[i]))
       }
-      // } else if SEQ[i] != 'A' && SEQ[i] != 'C' && SEQ[i] != 'G' && SEQ[i] != 'T' {
-      //    panic("Sequence contains an illegal character: " + string(SEQ[i]))
-      // }
    }
 }
 
