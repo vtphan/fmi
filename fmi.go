@@ -1,6 +1,7 @@
 /*
-   Copyright 2013 Vinhthuy Phan
-	FM index
+   Copyright 2014 Vinhthuy Phan
+	FM index for DNA sequences.  A DNA sequence must contain only upper case letters of A, C, G, T, and N.
+   N will be ignored. Reads contain N will not be located.
 */
 package fmi
 
@@ -12,6 +13,7 @@ import (
 	"sort"
 	"log"
 	"encoding/gob"
+   "encoding/binary"
 	"bufio"
 	"path"
 )
@@ -24,16 +26,11 @@ var Debug bool
 var SEQ []byte
 
 type Index struct{
-	SA []uint32 						// suffix array
+   LEN uint32
+   EP map[byte]uint32            // ending row/position of each symbol
 	C map[byte]uint32  				// count table
-	OCC map[byte][]uint32 			// occurence table
-
-	END_POS uint32 					// position of "$" in the text
-	SYMBOLS []int  					// sorted symbols
-	EP map[byte]uint32 				// ending row/position of each symbol
-
-	LEN uint32
-	freq map[byte]uint32          // Frequency of each symbol
+   OCC map[byte][]uint32         // occurence table
+   SA []uint32                   // suffix array
 }
 //
 
@@ -89,21 +86,18 @@ func Load (dir string) *Index {
 	I := new(Index)
 	_load(&I.C, path.Join(dir, "c"))
 	_load(&I.SA, path.Join(dir, "sa"))
-	_load(&I.END_POS, path.Join(dir, "end_pos"))
-	_load(&I.SYMBOLS, path.Join(dir, "symbols"))
 	_load(&I.EP, path.Join(dir, "ep"))
 	_load(&I.LEN, path.Join(dir, "len"))
 
 	I.OCC = make(map[byte][]uint32)
-	for _,symb := range I.SYMBOLS {
-		I.OCC[byte(symb)] = _load_occ(path.Join(dir, "occ."+string(symb)), I.LEN)
-	}
+	for c := range(I.C) {
+      I.OCC[c] = _load_occ(path.Join(dir, "occ."+string(c)), I.LEN)
+   }
 	return I
 }
 
 //-----------------------------------------------------------------------------
 func (I *Index) Save(file string) {
-	// save(I, file+".fm", "Fail to save fm index")
 	dir := file + ".index"
 	os.Mkdir(dir, 0777)
 
@@ -112,10 +106,18 @@ func (I *Index) Save(file string) {
 	}
 	_save(I.SA, path.Join(dir,"sa"), "Fail to save suffix array")
 	_save(I.C, path.Join(dir,"c"), "Fail to save count")
-	_save(I.END_POS, path.Join(dir,"end_pos"), "Fail to save end_pos")
-	_save(I.SYMBOLS, path.Join(dir,"symbols"), "Fail to save symbols")
 	_save(I.EP, path.Join(dir,"ep"), "Fail to save ep")
 	_save(I.LEN, path.Join(dir,"len"), "Fail to save len")
+}
+
+//-----------------------------------------------------------------------------
+func (I *Index) SaveIndex() {
+   buf := new(bytes.Buffer)
+   err := binary.Write(buf, binary.LittleEndian, I)
+   if err != nil {
+      fmt.Println("binary.Write failed:", err)
+   }
+   fmt.Println("% x", buf.Bytes())
 }
 //-----------------------------------------------------------------------------
 // BWT is saved into a separate file
@@ -130,30 +132,29 @@ func (I *Index) build_suffix_array() {
 
 //-----------------------------------------------------------------------------
 func (I *Index) build_bwt_fmindex() {
-	I.freq = make(map[byte]uint32)
+	freq := make(map[byte]uint32)
+   symbols := make([]int, 0)
+   I.C = make(map[byte]uint32)
+   I.OCC = make(map[byte][]uint32)
 	bwt := make([]byte, I.LEN)
 	var i uint32
 	for i = 0; i < I.LEN; i++ {
-		I.freq[SEQ[i]]++
+		freq[SEQ[i]]++
+      I.C[SEQ[i]]++
 		bwt[i] = SEQ[(I.LEN+I.SA[i]-1)%I.LEN]
-		if bwt[i] == '$' {
-			I.END_POS = i
-		}
 	}
 
-	I.C = make(map[byte]uint32)
-	I.OCC = make(map[byte][]uint32)
-	for c := range I.freq {
-		I.SYMBOLS = append(I.SYMBOLS, int(c))
+	for c := range freq {
+		symbols = append(symbols, int(c))
 		I.OCC[c] = make([]uint32, I.LEN)
-		I.C[c] = 0
+      I.C[c] = 0
 	}
-	sort.Ints(I.SYMBOLS)
+	sort.Ints(symbols)
 	I.EP = make(map[byte]uint32)
-	for j := 1; j < len(I.SYMBOLS); j++ {
-		curr_c, prev_c := byte(I.SYMBOLS[j]), byte(I.SYMBOLS[j-1])
-		I.C[curr_c] = I.C[prev_c] + I.freq[prev_c]
-		I.EP[curr_c] = I.C[curr_c] + I.freq[curr_c] - 1
+	for j := 1; j < len(symbols); j++ {
+		curr_c, prev_c := byte(symbols[j]), byte(symbols[j-1])
+		I.C[curr_c] = I.C[prev_c] + freq[prev_c]
+		I.EP[curr_c] = I.C[curr_c] + freq[curr_c] - 1
 	}
 
 	for j := 0; j < len(bwt); j++ {
@@ -164,15 +165,14 @@ func (I *Index) build_bwt_fmindex() {
 			}
 		}
 	}
-	I.SYMBOLS = I.SYMBOLS[1:]
+   I.show()
+
 	delete(I.OCC, '$')
 	delete(I.C, '$')
-   delete(I.OCC, 'Y')
-   delete(I.C, 'Y')
-   delete(I.OCC, 'W')
-   delete(I.C, 'W')
+   delete(I.OCC, 'Z')
+   delete(I.C, 'Z')
 
-   fmt.Println(I)
+   I.show()
 }
 
 //-----------------------------------------------------------------------------
@@ -274,9 +274,7 @@ func ReadSequence(file string) {
    // replace N with Y and '*' with W (last character is '$')
    for i:=0; i<len(SEQ)-1; i++ {
       if SEQ[i] == 'N' {
-         SEQ[i] = 'Y'
-      } else if SEQ[i] == '*' {
-         SEQ[i] = 'W'
+         SEQ[i] = 'Z'
       } else if SEQ[i] != 'A' && SEQ[i] != 'C' && SEQ[i] != 'G' && SEQ[i] != 'T' {
          panic("Sequence contains an illegal character: " + string(SEQ[i]))
       }
@@ -287,12 +285,11 @@ func ReadSequence(file string) {
 
 //-----------------------------------------------------------------------------
 func (I *Index) show() {
-	fmt.Printf(" %8s  OCC\n", "C")
-	for i := 0; i < len(I.SYMBOLS); i++ {
-		c := byte(I.SYMBOLS[i])
-		fmt.Printf("%c%8d  %d\n", c, I.C[c], I.OCC[c])
+   fmt.Println("Sequence length", I.LEN)
+	fmt.Printf(" %8s  %8s  OCC\n", "EP", "C")
+   for c := range(I.OCC) {
+		fmt.Printf("%c%8d  %8d  %d\n", c, I.EP[c], I.C[c], I.OCC[c])
 	}
-	fmt.Println(I.SYMBOLS)
 }
 
 //-----------------------------------------------------------------------------
