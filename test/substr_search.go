@@ -24,7 +24,6 @@ func main() {
    if *build_file != "" {
       idx := fmi.New(*build_file)
       idx.Save(*build_file)
-      idx.SaveIndex()
    } else if *index_file!="" && *queries_file!="" {
       idx := fmi.Load(*index_file)
       // fmt.Println("index", idx)
