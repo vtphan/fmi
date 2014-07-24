@@ -111,16 +111,6 @@ func (I *Index) Save(file string) {
 	_save(I.LEN, path.Join(dir,"len"), "Fail to save len")
    _save(I.END_POS, path.Join(dir,"end_pos"), "Fail to save end_pos")
 }
-
-//-----------------------------------------------------------------------------
-// func (I *Index) SaveIndex() {
-//    buf := new(bytes.Buffer)
-//    err := binary.Write(buf, binary.LittleEndian, I)
-//    if err != nil {
-//       fmt.Println("binary.Write failed:", err)
-//    }
-//    fmt.Println("% x", buf.Bytes())
-// }
 //-----------------------------------------------------------------------------
 func (I *Index) build_suffix_array() {
 	I.LEN = uint32(len(SEQ))
@@ -206,23 +196,6 @@ func (I *Index) SearchFrom(pattern []byte, start_pos int) (int, int, int) {
       c = pattern[i]
       offset, ok = I.C[c]
       if ok {
-         // if c != 'T' {
-         //    sp_occ = I.OCC[c][sp-1]
-         //    ep_occ = I.OCC[c][ep]
-         // } else {
-         //    // i+1 = sum of occ of all symbols (including $) at i
-         //    sp_occ = sp - (I.OCC['A'][sp-1] + I.OCC['C'][sp-1] + I.OCC['G'][sp-1])
-         //    if sp >= I.END_POS {
-         //       sp_occ -= 1
-         //    }
-         //    ep_occ = ep+1 - (I.OCC['A'][ep] + I.OCC['C'][ep] + I.OCC['G'][ep])
-         //    if ep >= I.END_POS {
-         //       ep_occ -= 1
-         //    }
-         // }
-         // // fmt.Println("\t", string(c), sp_occ, ep_occ, I.OCC[c][sp-1], I.OCC[c][ep], "\t", sp, I.OCC['A'][sp-1], I.OCC['C'][sp-1], I.OCC['G'][sp-1], I.OCC['T'][sp-1] )
-         // sp = offset + sp_occ
-         // ep = offset + ep_occ - 1
          sp = offset + I.OCC[c][sp - 1]
          ep = offset + I.OCC[c][ep] - 1
       } else {
@@ -308,13 +281,15 @@ func (I *Index) Show() {
    for c := range(I.OCC) {
 		fmt.Printf("%c%8d  %8d  %d\n", c, I.EP[c], I.C[c], I.OCC[c])
 	}
-   // for i:=uint32(0); i<I.LEN; i++ {
-   //    sum := I.OCC['A'][i] + I.OCC['C'][i] + I.OCC['G'][i] + I.OCC['T'][i]
-   //    fmt.Printf("%d = %d\t%d %d %d %d %d\n", i+1, sum, I.OCC['A'][i], I.OCC['C'][i], I.OCC['G'][i], I.OCC['T'][i], I.OCC['$'][i])
-   // }
-   // for i:=uint32(0); i < I.LEN; i++ {
-   //    fmt.Printf("%d\t%s\n", uint32(i), string(SEQ[I.SA[i]]))
-   // }
+   if Debug {
+      for i:=uint32(0); i<I.LEN; i++ {
+         sum := I.OCC['A'][i] + I.OCC['C'][i] + I.OCC['G'][i] + I.OCC['T'][i]
+         fmt.Printf("%d = %d\t%d %d %d %d\n", i+1, sum, I.OCC['A'][i], I.OCC['C'][i], I.OCC['G'][i], I.OCC['T'][i])
+      }
+      for i:=uint32(0); i < I.LEN; i++ {
+         fmt.Printf("%d\t%s\n", uint32(i), string(SEQ[I.SA[i]]))
+      }
+   }
 }
 
 //-----------------------------------------------------------------------------
