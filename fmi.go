@@ -47,34 +47,30 @@ func New (file string) *Index {
 }
 
 //-----------------------------------------------------------------------------
-
-//-----------------------------------------------------------------------------
-func _load(thing interface{}, filename string) {
-	fin,err := os.Open(filename)
-	decOCC := gob.NewDecoder(fin)
-	err = decOCC.Decode(thing)
-	if err != nil {
-		fmt.Println("Unable to read file ("+filename+"): ",err)
-	}
-}
-
-//-----------------------------------------------------------------------------
-func _load_occ(filename string, Len uint32) []uint32 {
-	thing := make([]uint32, Len)
-	fin,err := os.Open(filename)
-	decOCC := gob.NewDecoder(fin)
-	err = decOCC.Decode(&thing)
-	if err != nil {
-		log.Fatal("Error loading occ table:", filename, err)
-	}
-	return thing
-	// fmt.Println(thing[key], key)
-}
-
-//-----------------------------------------------------------------------------
 // Load FM index
 // Usage:  idx := Load(index_file)
 func Load (dir string) *Index {
+   _load := func(thing interface{}, filename string) {
+      fin,err := os.Open(filename)
+      decOCC := gob.NewDecoder(fin)
+      err = decOCC.Decode(thing)
+      if err != nil {
+         fmt.Println("Unable to read file ("+filename+"): ",err)
+      }
+   }
+
+   _load_occ := func(filename string, Len uint32) []uint32 {
+      thing := make([]uint32, Len)
+      fin,err := os.Open(filename)
+      decOCC := gob.NewDecoder(fin)
+      err = decOCC.Decode(&thing)
+      if err != nil {
+         log.Fatal("Error loading occ table:", filename, err)
+      }
+      return thing
+      // fmt.Println(thing[key], key)
+   }
+
 	I := new(Index)
 	_load(&I.C, path.Join(dir, "c"))
 	_load(&I.SA, path.Join(dir, "sa"))
