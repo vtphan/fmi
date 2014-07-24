@@ -1,6 +1,6 @@
 FM Index
 
-Specialized branch for reference genomes consisting of A, C, G, T, N, and *.
+Specialized branch for reference genomes consisting of only A, C, G, T, possibly N.
 
 ```
 	go run substr_search.go --build ref1.fasta 
