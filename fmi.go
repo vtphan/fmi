@@ -14,6 +14,7 @@ import (
 	"encoding/gob"
 	"bufio"
 	"path"
+	"sync"
 )
 
 var Debug bool
@@ -82,22 +83,51 @@ func _load_occ(filename string, Len uint32) []uint32 {
 	// fmt.Println(thing[key], key)
 }
 
+type Symb_OCC struct {
+	Symb int
+	OCC []uint32
+}
+
 //-----------------------------------------------------------------------------
 // Load FM index
 // Usage:  idx := Load(index_file)
 func Load (dir string) *Index {
+
 	I := new(Index)
 	_load(&I.C, path.Join(dir, "c"))
-	_load(&I.SA, path.Join(dir, "sa"))
 	_load(&I.END_POS, path.Join(dir, "end_pos"))
 	_load(&I.SYMBOLS, path.Join(dir, "symbols"))
 	_load(&I.EP, path.Join(dir, "ep"))
 	_load(&I.LEN, path.Join(dir, "len"))
 
 	I.OCC = make(map[byte][]uint32)
-	for _,symb := range I.SYMBOLS {
-		I.OCC[byte(symb)] = _load_occ(path.Join(dir, "occ."+string(symb)), I.LEN)
+
+	var wg sync.WaitGroup
+	wg.Add(5)
+	go func() {
+		defer wg.Done()
+		_load(&I.SA, path.Join(dir, "sa"))
+	}()
+	Symb_OCC_chan := make(chan Symb_OCC)
+	for _,symb := range I.SYMBOLS[0 : 4] {
+		go func(symb int, symb_occ chan Symb_OCC) {
+			defer wg.Done()
+			tmp_symb_occ := Symb_OCC{}
+			tmp_symb_occ.Symb = symb
+			tmp_symb_occ.OCC = _load_occ(path.Join(dir, "occ."+string(symb)), I.LEN)
+			symb_occ <- tmp_symb_occ
+		}(symb, Symb_OCC_chan)
 	}
+	go func() {
+		wg.Wait()
+		close(Symb_OCC_chan)
+	}()
+
+	for symb_occ := range(Symb_OCC_chan) {
+		I.OCC[byte(symb_occ.Symb)] = symb_occ.OCC
+	}
+
+	println("Len OCC ", len(I.OCC))
 	return I
 }
 
@@ -172,7 +202,7 @@ func (I *Index) build_bwt_fmindex() {
    delete(I.OCC, 'W')
    delete(I.C, 'W')
 
-   fmt.Println(I)
+   //fmt.Println(I)
 }
 
 //-----------------------------------------------------------------------------
