@@ -127,7 +127,6 @@ func Load (dir string) *Index {
 		I.OCC[byte(symb_occ.Symb)] = symb_occ.OCC
 	}
 
-	println("Len OCC ", len(I.OCC))
 	return I
 }
 
