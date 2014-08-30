@@ -13,9 +13,10 @@ import (
 	// "sort"
 	"log"
 	"encoding/gob"
-   // "encoding/binary"
+   "encoding/binary"
 	"bufio"
 	"path"
+   "runtime"
 )
 
 var Debug bool
@@ -35,14 +36,36 @@ type Index struct{
 }
 //
 
+var memstats = new(runtime.MemStats)
+
 //-----------------------------------------------------------------------------
 // Build FM index given the file storing the text.
 
+func show_memstat(mesg string) {
+   runtime.ReadMemStats(memstats)
+   log.Printf("%s:\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f", mesg,
+      float64(memstats.Alloc)/float64(1<<20),
+      float64(memstats.TotalAlloc)/float64(1<<20),
+      float64(memstats.Sys)/float64(1<<20),
+      float64(memstats.HeapAlloc)/float64(1<<20),
+      float64(memstats.HeapSys)/float64(1<<20))
+}
+
 func New (file string) *Index {
 	I := new(Index)
+
+   show_memstat("before read sequence")
+   show_memstat("before read sequence")
+
 	ReadSequence(file)
+   show_memstat("after  read sequence")
+
 	I.build_suffix_array()
+   show_memstat("after build sufarray")
+
 	I.build_bwt_fmindex()
+   show_memstat("after build fm-index")
+
 	return I
 }
 
@@ -59,28 +82,62 @@ func Load (dir string) *Index {
       }
    }
 
-   _load_occ := func(filename string, Len uint32) []uint32 {
-      thing := make([]uint32, Len)
-      fin,err := os.Open(filename)
-      decOCC := gob.NewDecoder(fin)
-      err = decOCC.Decode(&thing)
+   // _load_occ := func(filename string) []uint32 {
+   //    // thing := make([]uint32, Len)
+   //    var thing []uint32
+   //    fin,err := os.Open(filename)
+   //    decOCC := gob.NewDecoder(fin)
+   //    err = decOCC.Decode(&thing)
+   //    if err != nil {
+   //       log.Fatal("Error loading occ table:", filename, err)
+   //    }
+   //    return thing
+   //    // fmt.Println(thing[key], key)
+   // }
+
+   _load_slice := func(filename string, length uint32) []uint32 {
+      f, err := os.Open(filename)
       if err != nil {
-         log.Fatal("Error loading occ table:", filename, err)
+         panic("Error opening input read file")
       }
-      return thing
-      // fmt.Println(thing[key], key)
+      defer f.Close()
+
+      v := make([]uint32, length)
+      scanner := bufio.NewScanner(f)
+      scanner.Split(bufio.ScanBytes)
+      var d [4]uint32
+      fmt.Println("load slice", length)
+      for i:=0; scanner.Scan(); i++ {
+         // convert 4 consecutive bytes to a uint32 number
+         d[0] = uint32(scanner.Bytes()[0])
+         scanner.Scan()
+         d[1] = uint32(scanner.Bytes()[0])
+         scanner.Scan()
+         d[2] = uint32(scanner.Bytes()[0])
+         scanner.Scan()
+         d[3] = uint32(scanner.Bytes()[0])
+         v[i] = uint32(d[0]) + uint32(d[1])<<8 + uint32(d[2])<<16 + uint32(d[3])<<24
+      }
+      return v
    }
 
 	I := new(Index)
 	_load(&I.C, path.Join(dir, "c"))
-	_load(&I.SA, path.Join(dir, "sa"))
+
 	_load(&I.EP, path.Join(dir, "ep"))
 	_load(&I.LEN, path.Join(dir, "len"))
    _load(&I.END_POS, path.Join(dir, "end_pos"))
 
+   show_memstat("before load sa")
+   // _load(&I.SA, path.Join(dir, "sa"))
+   I.SA = _load_slice(path.Join(dir, "sa"), I.LEN)
+   show_memstat("after  load sa")
+
 	I.OCC = make(map[byte][]uint32)
 	for c := range(I.C) {
-      I.OCC[c] = _load_occ(path.Join(dir, "occ."+string(c)), I.LEN)
+      // I.OCC[c] = _load_occ(path.Join(dir, "occ."+string(c)))
+      I.OCC[c] = _load_slice(path.Join(dir, "occ."+string(c)), I.LEN)
+      show_memstat("before load occ." + string(c))
    }
 	return I
 }
@@ -99,13 +156,24 @@ func (I *Index) Save(file string) {
       ioutil.WriteFile(filename, buffer.Bytes(), 0600)
    }
 
+   _save_slice := func(s []uint32, filename string) {
+      buf := new(bytes.Buffer)
+      for i:=0; i<len(s); i++ {
+         binary.Write(buf, binary.LittleEndian, s[i])
+      }
+      fmt.Println("save slice", len(s))
+      ioutil.WriteFile(filename, buf.Bytes(), 0600)
+   }
+
 	dir := file + ".index"
 	os.Mkdir(dir, 0777)
 
 	for symb := range I.OCC {
-		_save(I.OCC[symb], path.Join(dir, "occ." + string(symb)),"Fail to save to occ."+string(symb))
+		// _save(I.OCC[symb], path.Join(dir, "occ." + string(symb)),"Fail to save to occ."+string(symb))
+      _save_slice(I.OCC[symb], path.Join(dir, "occ." + string(symb)))
 	}
-	_save(I.SA, path.Join(dir,"sa"), "Fail to save suffix array")
+	// _save(I.SA, path.Join(dir,"sa"), "Fail to save suffix array")
+   _save_slice(I.SA, path.Join(dir,"sa"))
 	_save(I.C, path.Join(dir,"c"), "Fail to save count")
 	_save(I.EP, path.Join(dir,"ep"), "Fail to save ep")
 	_save(I.LEN, path.Join(dir,"len"), "Fail to save len")
@@ -115,10 +183,14 @@ func (I *Index) Save(file string) {
 func (I *Index) build_suffix_array() {
 	I.LEN = uint32(len(SEQ))
 	I.SA = make([]uint32, I.LEN)
+
+   show_memstat("\tbefore sort")
    suffix_array := qsufsort(SEQ)
    for i := range suffix_array {
       I.SA[i] = uint32(suffix_array[i])
    }
+   show_memstat("\tafter  sort")
+
 }
 
 //-----------------------------------------------------------------------------

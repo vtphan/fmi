@@ -19,4 +19,5 @@ func main() {
    runtime.ReadMemStats(memstats)
    fmt.Printf("memstats before GC: bytes = %d footprint = %d\n", memstats.HeapAlloc, memstats.Sys)
    fmt.Println("Size\t", len(idx.SA))
+   idx.Save(os.Args[1])
 }
