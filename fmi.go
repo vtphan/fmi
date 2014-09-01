@@ -10,11 +10,12 @@ import (
 	"io/ioutil"
 	"os"
 	"sort"
-	"log"
-	"encoding/gob"
+   "encoding/binary"
 	"bufio"
 	"path"
 	"sync"
+   "strings"
+   "strconv"
 )
 
 var Debug bool
@@ -39,6 +40,14 @@ type Index struct{
 //
 
 //-----------------------------------------------------------------------------
+
+func check_for_error(e error) {
+    if e != nil {
+        panic(e)
+    }
+}
+
+//-----------------------------------------------------------------------------
 // Build FM index given the file storing the text.
 
 func New (file string) *Index {
@@ -50,38 +59,6 @@ func New (file string) *Index {
 }
 
 //-----------------------------------------------------------------------------
-func _save(thing interface{}, filename string, error_message string) {
-	var out bytes.Buffer
-	enc := gob.NewEncoder(&out)
-	err := enc.Encode(thing)
-	if err != nil {
-		log.Fatal(error_message)
-	}
-	fmt.Println("save", filename)
-	ioutil.WriteFile(filename, out.Bytes(), 0600)
-}
-//-----------------------------------------------------------------------------
-func _load(thing interface{}, filename string) {
-	fin,err := os.Open(filename)
-	decOCC := gob.NewDecoder(fin)
-	err = decOCC.Decode(thing)
-	if err != nil {
-		fmt.Println("Unable to read file ("+filename+"): ",err)
-	}
-}
-
-//-----------------------------------------------------------------------------
-func _load_occ(filename string, Len uint32) []uint32 {
-	thing := make([]uint32, Len)
-	fin,err := os.Open(filename)
-	decOCC := gob.NewDecoder(fin)
-	err = decOCC.Decode(&thing)
-	if err != nil {
-		log.Fatal("Error loading occ table:", filename, err)
-	}
-	return thing
-	// fmt.Println(thing[key], key)
-}
 
 type Symb_OCC struct {
 	Symb int
@@ -93,29 +70,74 @@ type Symb_OCC struct {
 // Usage:  idx := Load(index_file)
 func Load (dir string) *Index {
 
+   _load_slice := func(filename string, length uint32) []uint32 {
+      f, err := os.Open(filename)
+      if err != nil {
+         panic("Error opening input read file")
+      }
+      defer f.Close()
+
+      v := make([]uint32, length)
+      scanner := bufio.NewScanner(f)
+      scanner.Split(bufio.ScanBytes)
+      var d [4]uint32
+      for i:=0; scanner.Scan(); i++ {
+         // convert 4 consecutive bytes to a uint32 number
+         d[0] = uint32(scanner.Bytes()[0])
+         scanner.Scan()
+         d[1] = uint32(scanner.Bytes()[0])
+         scanner.Scan()
+         d[2] = uint32(scanner.Bytes()[0])
+         scanner.Scan()
+         d[3] = uint32(scanner.Bytes()[0])
+         v[i] = uint32(d[0]) + uint32(d[1])<<8 + uint32(d[2])<<16 + uint32(d[3])<<24
+      }
+      return v
+   }
+
 	I := new(Index)
-	_load(&I.C, path.Join(dir, "c"))
-	_load(&I.END_POS, path.Join(dir, "end_pos"))
-	_load(&I.SYMBOLS, path.Join(dir, "symbols"))
-	_load(&I.EP, path.Join(dir, "ep"))
-	_load(&I.LEN, path.Join(dir, "len"))
 
+   // First, load "others"
+   f, err := os.Open( path.Join(dir, "others"))
+   check_for_error(err)
+   defer f.Close()
+
+   scanner := bufio.NewScanner(f)
+   scanner.Scan()
+   items := strings.Split(scanner.Text(), " ")
+   v, _ := strconv.Atoi(items[0])
+   I.LEN = uint32(v)
+   v, err = strconv.Atoi(items[1])
+   I.END_POS = uint32(v)
+   I.Freq = make(map[byte]uint32)
+   I.C = make(map[byte]uint32)
+   I.EP = make(map[byte]uint32)
+
+   for scanner.Scan() {
+      items = strings.Split(scanner.Text(), " ")
+      symb := byte(items[0][0])
+      I.SYMBOLS = append(I.SYMBOLS, int(symb))
+      freq, _ := strconv.Atoi(items[1])
+      I.Freq[symb] = uint32(freq)
+      c, _ := strconv.Atoi(items[2])
+      I.C[symb] = uint32(c)
+      ep, _ := strconv.Atoi(items[3])
+      I.EP[symb] = uint32(ep)
+   }
+
+   // Second, load Suffix array and OCC
 	I.OCC = make(map[byte][]uint32)
-
 	var wg sync.WaitGroup
 	wg.Add(5)
 	go func() {
 		defer wg.Done()
-		_load(&I.SA, path.Join(dir, "sa"))
+      I.SA = _load_slice(path.Join(dir, "sa"), I.LEN)
 	}()
 	Symb_OCC_chan := make(chan Symb_OCC)
 	for _,symb := range I.SYMBOLS[0 : 4] {
 		go func(symb int, symb_occ chan Symb_OCC) {
 			defer wg.Done()
-			tmp_symb_occ := Symb_OCC{}
-			tmp_symb_occ.Symb = symb
-			tmp_symb_occ.OCC = _load_occ(path.Join(dir, "occ."+string(symb)), I.LEN)
-			symb_occ <- tmp_symb_occ
+			symb_occ <- Symb_OCC{symb, _load_slice(path.Join(dir, "occ."+string(symb)), I.LEN)}
 		}(symb, Symb_OCC_chan)
 	}
 	go func() {
@@ -126,25 +148,38 @@ func Load (dir string) *Index {
 	for symb_occ := range(Symb_OCC_chan) {
 		I.OCC[byte(symb_occ.Symb)] = symb_occ.OCC
 	}
-
 	return I
 }
 
 //-----------------------------------------------------------------------------
 func (I *Index) Save(file string) {
-	// save(I, file+".fm", "Fail to save fm index")
+
+   _save_slice := func(s []uint32, filename string) {
+      buf := new(bytes.Buffer)
+      for i:=0; i<len(s); i++ {
+         binary.Write(buf, binary.LittleEndian, s[i])
+      }
+      ioutil.WriteFile(filename, buf.Bytes(), 0600)
+      fmt.Println("save", filename)
+   }
+
 	dir := file + ".index"
 	os.Mkdir(dir, 0777)
+   for symb := range I.OCC {
+      _save_slice(I.OCC[symb], path.Join(dir, "occ." + string(symb)))
+   }
+   _save_slice(I.SA, path.Join(dir, "sa"))
 
-	for symb := range I.OCC {
-		_save(I.OCC[symb], path.Join(dir, "occ." + string(symb)),"Fail to save to occ."+string(symb))
-	}
-	_save(I.SA, path.Join(dir,"sa"), "Fail to save suffix array")
-	_save(I.C, path.Join(dir,"c"), "Fail to save count")
-	_save(I.END_POS, path.Join(dir,"end_pos"), "Fail to save end_pos")
-	_save(I.SYMBOLS, path.Join(dir,"symbols"), "Fail to save symbols")
-	_save(I.EP, path.Join(dir,"ep"), "Fail to save ep")
-	_save(I.LEN, path.Join(dir,"len"), "Fail to save len")
+   f, err := os.Create(path.Join(dir, "others"))
+   check_for_error(err)
+   defer f.Close()
+   w := bufio.NewWriter(f)
+   fmt.Fprintf(w, "%d %d\n", I.LEN, I.END_POS)
+   for i:=0; i<len(I.SYMBOLS); i++ {
+      symb := byte(I.SYMBOLS[i])
+      fmt.Fprintf(w, "%s %d %d %d\n", string(symb), I.Freq[symb], I.C[symb], I.EP[symb])
+   }
+   w.Flush()
 }
 //-----------------------------------------------------------------------------
 // BWT is saved into a separate file
@@ -193,7 +228,7 @@ func (I *Index) build_bwt_fmindex() {
 			}
 		}
 	}
-	I.SYMBOLS = I.SYMBOLS[1:]
+	I.SYMBOLS = I.SYMBOLS[1:]  // Remove $, which is the first symbol
 	delete(I.OCC, '$')
 	delete(I.C, '$')
    delete(I.OCC, 'Y')
@@ -201,7 +236,6 @@ func (I *Index) build_bwt_fmindex() {
    delete(I.OCC, 'W')
    delete(I.C, 'W')
 
-   //fmt.Println(I)
 }
 
 //-----------------------------------------------------------------------------
@@ -277,9 +311,7 @@ func (I *Index) Repeat(j, read_len int) []int {
 //-----------------------------------------------------------------------------
 func ReadSequence(file string) {
    f, err := os.Open(file)
-   if err != nil {
-      panic(err)
-   }
+   check_for_error(err)
    defer f.Close()
 
    if file[len(file)-6:] == ".fasta" {
@@ -317,18 +349,15 @@ func ReadSequence(file string) {
 //-----------------------------------------------------------------------------
 func (I *Index) Show() {
 	fmt.Printf(" %6s %6s  OCC\n", "Freq", "C")
-	for i := 0; i < len(I.SYMBOLS); i++ {
+	for i:=0; i < len(I.SYMBOLS); i++ {
 		c := byte(I.SYMBOLS[i])
 		fmt.Printf("%c%6d %6d  %d\n", c, I.Freq[c], I.C[c], I.OCC[c])
 	}
-}
-
-//-----------------------------------------------------------------------------
-func print_byte_array(a []byte) {
-	for i := 0; i < len(a); i++ {
-		fmt.Printf("%c", a[i])
-	}
-	fmt.Println()
+   fmt.Printf("SA ")
+   for i:=0; i<len(I.SA); i++ {
+      fmt.Print(I.SA[i], " ")
+   }
+   fmt.Println()
 }
 
 //-----------------------------------------------------------------------------
