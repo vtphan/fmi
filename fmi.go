@@ -34,7 +34,7 @@ type Index struct{
 	EP map[byte]uint32 				// ending row/position of each symbol
 
 	LEN uint32
-	freq map[byte]uint32          // Frequency of each symbol
+	Freq map[byte]uint32          // Frequency of each symbol
 }
 //
 
@@ -159,11 +159,11 @@ func (I *Index) build_suffix_array() {
 
 //-----------------------------------------------------------------------------
 func (I *Index) build_bwt_fmindex() {
-	I.freq = make(map[byte]uint32)
+	I.Freq = make(map[byte]uint32)
 	bwt := make([]byte, I.LEN)
 	var i uint32
 	for i = 0; i < I.LEN; i++ {
-		I.freq[SEQ[i]]++
+		I.Freq[SEQ[i]]++
 		bwt[i] = SEQ[(I.LEN+I.SA[i]-1)%I.LEN]
 		if bwt[i] == '$' {
 			I.END_POS = i
@@ -172,7 +172,7 @@ func (I *Index) build_bwt_fmindex() {
 
 	I.C = make(map[byte]uint32)
 	I.OCC = make(map[byte][]uint32)
-	for c := range I.freq {
+	for c := range I.Freq {
 		I.SYMBOLS = append(I.SYMBOLS, int(c))
 		I.OCC[c] = make([]uint32, I.LEN)
 		I.C[c] = 0
@@ -181,8 +181,8 @@ func (I *Index) build_bwt_fmindex() {
 	I.EP = make(map[byte]uint32)
 	for j := 1; j < len(I.SYMBOLS); j++ {
 		curr_c, prev_c := byte(I.SYMBOLS[j]), byte(I.SYMBOLS[j-1])
-		I.C[curr_c] = I.C[prev_c] + I.freq[prev_c]
-		I.EP[curr_c] = I.C[curr_c] + I.freq[curr_c] - 1
+		I.C[curr_c] = I.C[prev_c] + I.Freq[prev_c]
+		I.EP[curr_c] = I.C[curr_c] + I.Freq[curr_c] - 1
 	}
 
 	for j := 0; j < len(bwt); j++ {
@@ -315,13 +315,12 @@ func ReadSequence(file string) {
 
 
 //-----------------------------------------------------------------------------
-func (I *Index) show() {
-	fmt.Printf(" %8s  OCC\n", "C")
+func (I *Index) Show() {
+	fmt.Printf(" %6s %6s  OCC\n", "Freq", "C")
 	for i := 0; i < len(I.SYMBOLS); i++ {
 		c := byte(I.SYMBOLS[i])
-		fmt.Printf("%c%8d  %d\n", c, I.C[c], I.OCC[c])
+		fmt.Printf("%c%6d %6d  %d\n", c, I.Freq[c], I.C[c], I.OCC[c])
 	}
-	fmt.Println(I.SYMBOLS)
 }
 
 //-----------------------------------------------------------------------------
