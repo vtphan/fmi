@@ -72,9 +72,7 @@ func Load (dir string) *Index {
 
    _load_slice := func(filename string, length uint32) []uint32 {
       f, err := os.Open(filename)
-      if err != nil {
-         panic("Error opening input read file")
-      }
+      check_for_error(err)
       defer f.Close()
 
       v := make([]uint32, length)
@@ -326,9 +324,7 @@ func ReadSequence(file string) {
 		SEQ = append(byte_array, byte('$'))
 	} else {
 		byte_array, err := ioutil.ReadFile(file)
-		if err != nil {
-			panic(err)
-		}
+      check_for_error(err)
 		SEQ = append(bytes.Trim(byte_array, "\n\r "), byte('$'))
 	}
 
