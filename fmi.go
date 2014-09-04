@@ -16,6 +16,7 @@ import (
 	"sync"
    "strings"
    "strconv"
+   "runtime"
 )
 
 var Debug bool
@@ -51,6 +52,7 @@ func check_for_error(e error) {
 // Build FM index given the file storing the text.
 
 func New (file string) *Index {
+   runtime.GOMAXPROCS(runtime.NumCPU())
 	I := new(Index)
 	ReadSequence(file)
 	I.build_suffix_array()
@@ -93,6 +95,7 @@ func Load (dir string) *Index {
       return v
    }
 
+   runtime.GOMAXPROCS(runtime.NumCPU())
 	I := new(Index)
 
    // First, load "others"
@@ -133,10 +136,10 @@ func Load (dir string) *Index {
 	}()
 	Symb_OCC_chan := make(chan Symb_OCC)
 	for _,symb := range I.SYMBOLS[0 : 4] {
-		go func(symb int, symb_occ chan Symb_OCC) {
+		go func(symb int) {
 			defer wg.Done()
-			symb_occ <- Symb_OCC{symb, _load_slice(path.Join(dir, "occ."+string(symb)), I.LEN)}
-		}(symb, Symb_OCC_chan)
+			Symb_OCC_chan <- Symb_OCC{symb, _load_slice(path.Join(dir, "occ."+string(symb)), I.LEN)}
+		}(symb)
 	}
 	go func() {
 		wg.Wait()
@@ -163,10 +166,21 @@ func (I *Index) Save(file string) {
 
 	dir := file + ".index"
 	os.Mkdir(dir, 0777)
+
+   var wg sync.WaitGroup
+   wg.Add(5)
+
+   go func() {
+      defer wg.Done()
+      _save_slice(I.SA, path.Join(dir, "sa"))
+   }()
+
    for symb := range I.OCC {
-      _save_slice(I.OCC[symb], path.Join(dir, "occ." + string(symb)))
+      go func() {
+         defer wg.Done()
+         _save_slice(I.OCC[symb], path.Join(dir, "occ." + string(symb)))
+      }()
    }
-   _save_slice(I.SA, path.Join(dir, "sa"))
 
    f, err := os.Create(path.Join(dir, "others"))
    check_for_error(err)
@@ -178,6 +192,7 @@ func (I *Index) Save(file string) {
       fmt.Fprintf(w, "%s %d %d %d\n", string(symb), I.Freq[symb], I.C[symb], I.EP[symb])
    }
    w.Flush()
+   wg.Wait()
 }
 //-----------------------------------------------------------------------------
 // BWT is saved into a separate file
