@@ -176,10 +176,10 @@ func (I *Index) Save(file string) {
    }()
 
    for symb := range I.OCC {
-      go func() {
+      go func(symb byte) {
          defer wg.Done()
          _save_slice(I.OCC[symb], path.Join(dir, "occ." + string(symb)))
-      }()
+      }(symb)
    }
 
    f, err := os.Create(path.Join(dir, "others"))
