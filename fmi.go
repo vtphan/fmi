@@ -16,7 +16,6 @@ import (
 	"sync"
    "strings"
    "strconv"
-   "runtime"
 )
 
 var Debug bool
@@ -52,7 +51,6 @@ func check_for_error(e error) {
 // Build FM index given the file storing the text.
 
 func New (file string) *Index {
-   runtime.GOMAXPROCS(runtime.NumCPU())
 	I := new(Index)
 	ReadSequence(file)
 	I.build_suffix_array()
@@ -95,7 +93,6 @@ func Load (dir string) *Index {
       return v
    }
 
-   runtime.GOMAXPROCS(runtime.NumCPU())
 	I := new(Index)
 
    // First, load "others"
