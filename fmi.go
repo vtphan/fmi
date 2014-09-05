@@ -14,8 +14,6 @@ import (
 	"bufio"
 	"path"
 	"sync"
-   "strings"
-   "strconv"
 )
 
 var Debug bool
@@ -76,18 +74,8 @@ func Load (dir string) *Index {
       defer f.Close()
 
       v := make([]uint32, length)
-      scanner := bufio.NewScanner(f)
-      scanner.Split(bufio.ScanBytes)
-      for i:=0; scanner.Scan(); i++ {
-         // convert 4 consecutive bytes to a uint32 number
-         v[i] = uint32(scanner.Bytes()[0])
-         scanner.Scan()
-         v[i] += uint32(scanner.Bytes()[0])<<8
-         scanner.Scan()
-         v[i] += uint32(scanner.Bytes()[0])<<16
-         scanner.Scan()
-         v[i] += uint32(scanner.Bytes()[0])<<24
-      }
+      r := bufio.NewReader(f)
+      binary.Read(r, binary.LittleEndian, v)
       return v
    }
 
@@ -98,27 +86,19 @@ func Load (dir string) *Index {
    check_for_error(err)
    defer f.Close()
 
+   var symb byte
+   var freq, c, ep uint32
    scanner := bufio.NewScanner(f)
    scanner.Scan()
-   items := strings.Split(scanner.Text(), " ")
-   v, _ := strconv.Atoi(items[0])
-   I.LEN = uint32(v)
-   v, err = strconv.Atoi(items[1])
-   I.END_POS = uint32(v)
+   fmt.Sscanf(scanner.Text(), "%d%d\n", &I.LEN, &I.END_POS)
+
    I.Freq = make(map[byte]uint32)
    I.C = make(map[byte]uint32)
    I.EP = make(map[byte]uint32)
-
    for scanner.Scan() {
-      items = strings.Split(scanner.Text(), " ")
-      symb := byte(items[0][0])
+      fmt.Sscanf(scanner.Text(), "%c%d%d%d", &symb, &freq, &c, &ep)
       I.SYMBOLS = append(I.SYMBOLS, int(symb))
-      freq, _ := strconv.Atoi(items[1])
-      I.Freq[symb] = uint32(freq)
-      c, _ := strconv.Atoi(items[2])
-      I.C[symb] = uint32(c)
-      ep, _ := strconv.Atoi(items[3])
-      I.EP[symb] = uint32(ep)
+      I.Freq[symb], I.C[symb], I.EP[symb] = freq, c, ep
    }
 
    // Second, load Suffix array and OCC
@@ -156,9 +136,6 @@ func (I *Index) Save(file string) {
       defer f.Close()
       w := bufio.NewWriter(f)
       binary.Write(w, binary.LittleEndian, s)
-      // for i:=0; i<len(s); i++ {
-      //    binary.Write(w, binary.LittleEndian, s[i])
-      // }
       w.Flush()
    }
 
