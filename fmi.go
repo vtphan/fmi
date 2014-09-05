@@ -74,8 +74,20 @@ func Load (dir string) *Index {
       defer f.Close()
 
       v := make([]uint32, length)
-      r := bufio.NewReader(f)
-      binary.Read(r, binary.LittleEndian, v)
+      scanner := bufio.NewScanner(f)
+      scanner.Split(bufio.ScanBytes)
+      for i:=0; scanner.Scan(); i++ {
+         // convert 4 consecutive bytes to a uint32 number
+         v[i] = uint32(scanner.Bytes()[0])
+         scanner.Scan()
+         v[i] += uint32(scanner.Bytes()[0])<<8
+         scanner.Scan()
+         v[i] += uint32(scanner.Bytes()[0])<<16
+         scanner.Scan()
+         v[i] += uint32(scanner.Bytes()[0])<<24
+      }
+      // r := bufio.NewReader(f)
+      // binary.Read(r, binary.LittleEndian, v)
       return v
    }
 
