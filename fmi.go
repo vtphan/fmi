@@ -78,17 +78,15 @@ func Load (dir string) *Index {
       v := make([]uint32, length)
       scanner := bufio.NewScanner(f)
       scanner.Split(bufio.ScanBytes)
-      var d [4]uint32
       for i:=0; scanner.Scan(); i++ {
          // convert 4 consecutive bytes to a uint32 number
-         d[0] = uint32(scanner.Bytes()[0])
+         v[i] = uint32(scanner.Bytes()[0])
          scanner.Scan()
-         d[1] = uint32(scanner.Bytes()[0])
+         v[i] += uint32(scanner.Bytes()[0])<<8
          scanner.Scan()
-         d[2] = uint32(scanner.Bytes()[0])
+         v[i] += uint32(scanner.Bytes()[0])<<16
          scanner.Scan()
-         d[3] = uint32(scanner.Bytes()[0])
-         v[i] = uint32(d[0]) + uint32(d[1])<<8 + uint32(d[2])<<16 + uint32(d[3])<<24
+         v[i] += uint32(scanner.Bytes()[0])<<24
       }
       return v
    }
