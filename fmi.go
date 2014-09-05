@@ -155,9 +155,10 @@ func (I *Index) Save(file string) {
       check_for_error(err)
       defer f.Close()
       w := bufio.NewWriter(f)
-      for i:=0; i<len(s); i++ {
-         binary.Write(w, binary.LittleEndian, s[i])
-      }
+      binary.Write(w, binary.LittleEndian, s)
+      // for i:=0; i<len(s); i++ {
+      //    binary.Write(w, binary.LittleEndian, s[i])
+      // }
       w.Flush()
    }
 
