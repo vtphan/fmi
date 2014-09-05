@@ -151,12 +151,14 @@ func Load (dir string) *Index {
 func (I *Index) Save(file string) {
 
    _save_slice := func(s []uint32, filename string) {
-      buf := new(bytes.Buffer)
+      f, err := os.Create(filename)
+      check_for_error(err)
+      defer f.Close()
+      w := bufio.NewWriter(f)
       for i:=0; i<len(s); i++ {
-         binary.Write(buf, binary.LittleEndian, s[i])
+         binary.Write(w, binary.LittleEndian, s[i])
       }
-      ioutil.WriteFile(filename, buf.Bytes(), 0600)
-      fmt.Println("save", filename)
+      w.Flush()
    }
 
 	dir := file + ".index"
