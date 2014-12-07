@@ -6,3 +6,6 @@ Specialized branch for reference genomes consisting of A, C, G, T, N, and *.
 	go run substr_search.go --build ref1.fasta 
 	go run substr_search.go -i ref1.fasta.index -q q1.txt 
 ```
+
+Suffix array sorting is cloned from jgallagher's implementation of 
+""An Optimal Suffix Array Construction Algorithm", by Ge Nong.
