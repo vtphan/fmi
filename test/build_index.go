@@ -5,6 +5,7 @@ import (
    "os"
    "runtime"
    "log"
+   // "fmt"
 )
 
 
@@ -26,6 +27,9 @@ func main() {
    show_memstat("before")
    idx := fmi.New(os.Args[1])
    idx.Save(os.Args[1])
-   // idx.Show()
+   // for i:=0; i<len(idx.SA); i++ {
+   //    fmt.Println(i, idx.SA[i])
+   // }
+   idx.Show()
    show_memstat("after")
 }
