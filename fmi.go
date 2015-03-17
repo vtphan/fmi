@@ -1,6 +1,6 @@
 /*
    Copyright 2013 Vinhthuy Phan
-	FM index
+	FM index.
 */
 package fmi
 
@@ -47,7 +47,6 @@ func check_for_error(e error) {
 
 //-----------------------------------------------------------------------------
 // Build FM index given the file storing the text.
-
 func New (file string) *Index {
 	I := new(Index)
 	ReadSequence(file)
@@ -64,8 +63,7 @@ type Symb_OCC struct {
 }
 
 //-----------------------------------------------------------------------------
-// Load FM index
-// Usage:  idx := Load(index_file)
+// Load FM index. Usage:  idx := Load(index_file)
 func Load (dir string) *Index {
 
    _load_slice := func(filename string, length uint32) []uint32 {
@@ -140,7 +138,8 @@ func Load (dir string) *Index {
 }
 
 //-----------------------------------------------------------------------------
-func (I *Index) Save(file string) {
+// Save the index to directory.
+func (I *Index) Save(dirname string) {
 
    _save_slice := func(s []uint32, filename string) {
       f, err := os.Create(filename)
@@ -151,7 +150,7 @@ func (I *Index) Save(file string) {
       w.Flush()
    }
 
-	dir := file + ".index"
+	dir := dirname + ".index"
 	os.Mkdir(dir, 0777)
 
    var wg sync.WaitGroup
@@ -241,10 +240,7 @@ func (I *Index) build_bwt_fmindex() {
 
 }
 
-//-----------------------------------------------------------------------------
 // Search for all occurences of pattern in SEQ
-//-----------------------------------------------------------------------------
-
 func (I *Index) Search(pattern []byte) []int {
    sp, ep, _ := I.SearchFrom(pattern, len(pattern)-1)
 	res := make([]int, ep-sp+1)
@@ -254,9 +250,7 @@ func (I *Index) Search(pattern []byte) []int {
  	return res
 }
 
-//-----------------------------------------------------------------------------
 // Returns starting, ending positions (sp, ep) and last-matched position (i)
-//-----------------------------------------------------------------------------
 func (I *Index) SearchFrom(pattern []byte, start_pos int) (int, int, int) {
    var offset uint32
    var i int
@@ -280,10 +274,7 @@ func (I *Index) SearchFrom(pattern []byte, start_pos int) (int, int, int) {
    return int(sp), int(ep), i+1
 }
 
-//-----------------------------------------------------------------------------
 // Search for all repeats of SEQ[j:j+read_len] in SEQ
-//-----------------------------------------------------------------------------
-
 func (I *Index) Repeat(j, read_len int) []int {
 	var sp, ep, offset uint32
 	var ok bool

@@ -23,6 +23,9 @@ func show_memstat(mesg string) {
 
 //-----------------------------------------------------------------------------
 func main() {
+   if len(os.Args) != 2 {
+      panic("Usage: go run build_index.go file.fasta")
+   }
    runtime.GOMAXPROCS(runtime.NumCPU())
    show_memstat("before")
    idx := fmi.New(os.Args[1])
