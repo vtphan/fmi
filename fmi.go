@@ -5,14 +5,14 @@
 package fmi
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"os"
-	"sort"
-   "encoding/binary"
-	"bufio"
 	"path"
+	"sort"
 	"sync"
 )
 
@@ -23,31 +23,32 @@ var Debug bool
 //-----------------------------------------------------------------------------
 var SEQ []byte
 
-type Index struct{
-	SA []uint32 						// suffix array
-	C map[byte]uint32  				// count table
-	OCC map[byte][]uint32 			// occurence table
+type Index struct {
+	SA  []uint32          // suffix array
+	C   map[byte]uint32   // count table
+	OCC map[byte][]uint32 // occurence table
 
-	END_POS uint32 					// position of "$" in the text
-	SYMBOLS []int  					// sorted symbols
-	EP map[byte]uint32 				// ending row/position of each symbol
+	END_POS uint32          // position of "$" in the text
+	SYMBOLS []int           // sorted symbols
+	EP      map[byte]uint32 // ending row/position of each symbol
 
-	LEN uint32
-	Freq map[byte]uint32          // Frequency of each symbol
+	LEN  uint32
+	Freq map[byte]uint32 // Frequency of each symbol
 }
+
 //
 
 //-----------------------------------------------------------------------------
 
 func check_for_error(e error) {
-    if e != nil {
-        panic(e)
-    }
+	if e != nil {
+		panic(e)
+	}
 }
 
 //-----------------------------------------------------------------------------
 // Build FM index given the file storing the text.
-func New (file string) *Index {
+func New(file string) *Index {
 	I := new(Index)
 	ReadSequence(file)
 	I.build_suffix_array()
@@ -59,68 +60,68 @@ func New (file string) *Index {
 
 type Symb_OCC struct {
 	Symb int
-	OCC []uint32
+	OCC  []uint32
 }
 
 //-----------------------------------------------------------------------------
 // Load FM index. Usage:  idx := Load(index_file)
-func Load (dir string) *Index {
+func Load(dir string) *Index {
 
-   _load_slice := func(filename string, length uint32) []uint32 {
-      f, err := os.Open(filename)
-      check_for_error(err)
-      defer f.Close()
+	_load_slice := func(filename string, length uint32) []uint32 {
+		f, err := os.Open(filename)
+		check_for_error(err)
+		defer f.Close()
 
-      v := make([]uint32, length)
-      scanner := bufio.NewScanner(f)
-      scanner.Split(bufio.ScanBytes)
-      for i:=0; scanner.Scan(); i++ {
-         // convert 4 consecutive bytes to a uint32 number
-         v[i] = uint32(scanner.Bytes()[0])
-         scanner.Scan()
-         v[i] += uint32(scanner.Bytes()[0])<<8
-         scanner.Scan()
-         v[i] += uint32(scanner.Bytes()[0])<<16
-         scanner.Scan()
-         v[i] += uint32(scanner.Bytes()[0])<<24
-      }
-      // r := bufio.NewReader(f)
-      // binary.Read(r, binary.LittleEndian, v)
-      return v
-   }
+		v := make([]uint32, length)
+		scanner := bufio.NewScanner(f)
+		scanner.Split(bufio.ScanBytes)
+		for i := 0; scanner.Scan(); i++ {
+			// convert 4 consecutive bytes to a uint32 number
+			v[i] = uint32(scanner.Bytes()[0])
+			scanner.Scan()
+			v[i] += uint32(scanner.Bytes()[0]) << 8
+			scanner.Scan()
+			v[i] += uint32(scanner.Bytes()[0]) << 16
+			scanner.Scan()
+			v[i] += uint32(scanner.Bytes()[0]) << 24
+		}
+		// r := bufio.NewReader(f)
+		// binary.Read(r, binary.LittleEndian, v)
+		return v
+	}
 
 	I := new(Index)
 
-   // First, load "others"
-   f, err := os.Open( path.Join(dir, "others"))
-   check_for_error(err)
-   defer f.Close()
+	// First, load "others"
+	f, err := os.Open(path.Join(dir, "others"))
+	check_for_error(err)
+	defer f.Close()
 
-   var symb byte
-   var freq, c, ep uint32
-   scanner := bufio.NewScanner(f)
-   scanner.Scan()
-   fmt.Sscanf(scanner.Text(), "%d%d\n", &I.LEN, &I.END_POS)
+	var symb byte
+	var freq, c, ep uint32
+	scanner := bufio.NewScanner(f)
+	scanner.Scan()
+	fmt.Sscanf(scanner.Text(), "%d%d\n", &I.LEN, &I.END_POS)
 
-   I.Freq = make(map[byte]uint32)
-   I.C = make(map[byte]uint32)
-   I.EP = make(map[byte]uint32)
-   for scanner.Scan() {
-      fmt.Sscanf(scanner.Text(), "%c%d%d%d", &symb, &freq, &c, &ep)
-      I.SYMBOLS = append(I.SYMBOLS, int(symb))
-      I.Freq[symb], I.C[symb], I.EP[symb] = freq, c, ep
-   }
+	I.Freq = make(map[byte]uint32)
+	I.C = make(map[byte]uint32)
+	I.EP = make(map[byte]uint32)
+	for scanner.Scan() {
+		fmt.Sscanf(scanner.Text(), "%c%d%d%d", &symb, &freq, &c, &ep)
+		I.SYMBOLS = append(I.SYMBOLS, int(symb))
+		I.Freq[symb], I.C[symb], I.EP[symb] = freq, c, ep
+	}
 
-   // Second, load Suffix array and OCC
+	// Second, load Suffix array and OCC
 	I.OCC = make(map[byte][]uint32)
 	var wg sync.WaitGroup
 	wg.Add(5)
 	go func() {
 		defer wg.Done()
-      I.SA = _load_slice(path.Join(dir, "sa"), I.LEN)
+		I.SA = _load_slice(path.Join(dir, "sa"), I.LEN)
 	}()
 	Symb_OCC_chan := make(chan Symb_OCC)
-	for _,symb := range I.SYMBOLS[0 : 4] {
+	for _, symb := range I.SYMBOLS[0:4] {
 		go func(symb int) {
 			defer wg.Done()
 			Symb_OCC_chan <- Symb_OCC{symb, _load_slice(path.Join(dir, "occ."+string(symb)), I.LEN)}
@@ -131,7 +132,7 @@ func Load (dir string) *Index {
 		close(Symb_OCC_chan)
 	}()
 
-	for symb_occ := range(Symb_OCC_chan) {
+	for symb_occ := range Symb_OCC_chan {
 		I.OCC[byte(symb_occ.Symb)] = symb_occ.OCC
 	}
 	return I
@@ -141,57 +142,58 @@ func Load (dir string) *Index {
 // Save the index to directory.
 func (I *Index) Save(dirname string) {
 
-   _save_slice := func(s []uint32, filename string) {
-      f, err := os.Create(filename)
-      check_for_error(err)
-      defer f.Close()
-      w := bufio.NewWriter(f)
-      binary.Write(w, binary.LittleEndian, s)
-      w.Flush()
-   }
+	_save_slice := func(s []uint32, filename string) {
+		f, err := os.Create(filename)
+		check_for_error(err)
+		defer f.Close()
+		w := bufio.NewWriter(f)
+		binary.Write(w, binary.LittleEndian, s)
+		w.Flush()
+	}
 
 	dir := dirname + ".index"
 	os.Mkdir(dir, 0777)
 
-   var wg sync.WaitGroup
-   wg.Add(5)
+	var wg sync.WaitGroup
+	wg.Add(5)
 
-   go func() {
-      defer wg.Done()
-      _save_slice(I.SA, path.Join(dir, "sa"))
-   }()
+	go func() {
+		defer wg.Done()
+		_save_slice(I.SA, path.Join(dir, "sa"))
+	}()
 
-   for symb := range I.OCC {
-      go func(symb byte) {
-         defer wg.Done()
-         _save_slice(I.OCC[symb], path.Join(dir, "occ." + string(symb)))
-      }(symb)
-   }
+	for symb := range I.OCC {
+		go func(symb byte) {
+			defer wg.Done()
+			_save_slice(I.OCC[symb], path.Join(dir, "occ."+string(symb)))
+		}(symb)
+	}
 
-   f, err := os.Create(path.Join(dir, "others"))
-   check_for_error(err)
-   defer f.Close()
-   w := bufio.NewWriter(f)
-   fmt.Fprintf(w, "%d %d\n", I.LEN, I.END_POS)
-   for i:=0; i<len(I.SYMBOLS); i++ {
-      symb := byte(I.SYMBOLS[i])
-      fmt.Fprintf(w, "%s %d %d %d\n", string(symb), I.Freq[symb], I.C[symb], I.EP[symb])
-   }
-   w.Flush()
-   wg.Wait()
+	f, err := os.Create(path.Join(dir, "others"))
+	check_for_error(err)
+	defer f.Close()
+	w := bufio.NewWriter(f)
+	fmt.Fprintf(w, "%d %d\n", I.LEN, I.END_POS)
+	for i := 0; i < len(I.SYMBOLS); i++ {
+		symb := byte(I.SYMBOLS[i])
+		fmt.Fprintf(w, "%s %d %d %d\n", string(symb), I.Freq[symb], I.C[symb], I.EP[symb])
+	}
+	w.Flush()
+	wg.Wait()
 }
+
 //-----------------------------------------------------------------------------
 // BWT is saved into a separate file
 func (I *Index) build_suffix_array() {
 	I.LEN = uint32(len(SEQ))
 	I.SA = make([]uint32, I.LEN)
-   // SA := qsufsort(SEQ)
-   SA := make([]int, I.LEN)
-   ws := &WorkSpace{}
-   ws.ComputeSuffixArray(SEQ, SA)
-   for i := range SA {
-      I.SA[i] = uint32(SA[i])
-   }
+	// SA := qsufsort(SEQ)
+	SA := make([]int, I.LEN)
+	ws := &WorkSpace{}
+	ws.ComputeSuffixArray(SEQ, SA)
+	for i := range SA {
+		I.SA[i] = uint32(SA[i])
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -201,7 +203,11 @@ func (I *Index) build_bwt_fmindex() {
 	var i uint32
 	for i = 0; i < I.LEN; i++ {
 		I.Freq[SEQ[i]]++
-		bwt[i] = SEQ[(I.LEN+I.SA[i]-1)%I.LEN]
+		if I.SA[i] == 0 {
+			bwt[i] = SEQ[I.LEN-1]
+		} else {
+			bwt[i] = SEQ[I.SA[i]-1]
+		}
 		if bwt[i] == '$' {
 			I.END_POS = i
 		}
@@ -230,48 +236,48 @@ func (I *Index) build_bwt_fmindex() {
 			}
 		}
 	}
-	I.SYMBOLS = I.SYMBOLS[1:]  // Remove $, which is the first symbol
+	I.SYMBOLS = I.SYMBOLS[1:] // Remove $, which is the first symbol
 	delete(I.OCC, '$')
 	delete(I.C, '$')
-   delete(I.OCC, 'Y')
-   delete(I.C, 'Y')
-   delete(I.OCC, 'W')
-   delete(I.C, 'W')
+	delete(I.OCC, 'Y')
+	delete(I.C, 'Y')
+	delete(I.OCC, 'W')
+	delete(I.C, 'W')
 
 }
 
 // Search for all occurences of pattern in SEQ
 func (I *Index) Search(pattern []byte) []int {
-   sp, ep, _ := I.SearchFrom(pattern, len(pattern)-1)
+	sp, ep, _ := I.SearchFrom(pattern, len(pattern)-1)
 	res := make([]int, ep-sp+1)
-	for k:=sp; k<=ep; k++ {
+	for k := sp; k <= ep; k++ {
 		res[k-sp] = int(I.SA[k])
 	}
- 	return res
+	return res
 }
 
 // Returns starting, ending positions (sp, ep) and last-matched position (i)
 func (I *Index) SearchFrom(pattern []byte, start_pos int) (int, int, int) {
-   var offset uint32
-   var i int
+	var offset uint32
+	var i int
 
-   c := pattern[start_pos]
-   sp, ok := I.C[c]
-   if ! ok {
-      return 0, -1, -1
-   }
-   ep := I.EP[c]
-   for i=int(start_pos-1); sp <= ep && i >= 0; i-- {
-      c = pattern[i]
-      offset, ok = I.C[c]
-      if ok {
-         sp = offset + I.OCC[c][sp - 1]
-         ep = offset + I.OCC[c][ep] - 1
-      } else {
-         return 0, -1, -1
-      }
-   }
-   return int(sp), int(ep), i+1
+	c := pattern[start_pos]
+	sp, ok := I.C[c]
+	if !ok {
+		return 0, -1, -1
+	}
+	ep := I.EP[c]
+	for i = int(start_pos - 1); sp <= ep && i >= 0; i-- {
+		c = pattern[i]
+		offset, ok = I.C[c]
+		if ok {
+			sp = offset + I.OCC[c][sp-1]
+			ep = offset + I.OCC[c][ep] - 1
+		} else {
+			return 0, -1, -1
+		}
+	}
+	return int(sp), int(ep), i + 1
 }
 
 // Search for all repeats of SEQ[j:j+read_len] in SEQ
@@ -281,76 +287,73 @@ func (I *Index) Repeat(j, read_len int) []int {
 
 	c := SEQ[j+read_len-1]
 	sp, ok = I.C[c]
-	if ! ok {
+	if !ok {
 		return make([]int, 0)
 	}
 	ep = I.EP[c]
-	for i:=int(read_len-2); sp <= ep && i >= 0; i-- {
-  		c = SEQ[j+int(i)]
-  		offset, ok = I.C[c]
-  		if ok {
-			sp = offset + I.OCC[c][sp - 1]
+	for i := int(read_len - 2); sp <= ep && i >= 0; i-- {
+		c = SEQ[j+int(i)]
+		offset, ok = I.C[c]
+		if ok {
+			sp = offset + I.OCC[c][sp-1]
 			ep = offset + I.OCC[c][ep] - 1
 		} else {
 			return make([]int, 0)
 		}
 	}
 	res := make([]int, ep-sp+1)
-	for k:=sp; k<=ep; k++ {
+	for k := sp; k <= ep; k++ {
 		res[k-sp] = int(I.SA[k])
 	}
- 	return res
+	return res
 }
 
 //-----------------------------------------------------------------------------
 func ReadSequence(file string) {
-   f, err := os.Open(file)
-   check_for_error(err)
-   defer f.Close()
+	f, err := os.Open(file)
+	check_for_error(err)
+	defer f.Close()
 
-   if file[len(file)-6:] == ".fasta" {
-	   scanner := bufio.NewScanner(f)
-	   byte_array := make([]byte, 0)
-	   for scanner.Scan() {
-	      line := scanner.Bytes()
-	      if len(line)>0 && line[0] != '>' {
-	         byte_array = append(byte_array, bytes.Trim(line,"\n\r ")...)
-	      }
-	   }
+	if file[len(file)-6:] == ".fasta" {
+		scanner := bufio.NewScanner(f)
+		byte_array := make([]byte, 0)
+		for scanner.Scan() {
+			line := scanner.Bytes()
+			if len(line) > 0 && line[0] != '>' {
+				byte_array = append(byte_array, bytes.Trim(line, "\n\r ")...)
+			}
+		}
 		SEQ = append(byte_array, byte('$'))
 	} else {
 		byte_array, err := ioutil.ReadFile(file)
-      check_for_error(err)
+		check_for_error(err)
 		SEQ = append(bytes.Trim(byte_array, "\n\r "), byte('$'))
 	}
 
-   // replace N with Y and '*' with W (last character is '$')
-   for i:=0; i<len(SEQ)-1; i++ {
-      if SEQ[i] == 'N' {
-         SEQ[i] = 'Y'
-      } else if SEQ[i] == '*' {
-         SEQ[i] = 'W'
-      } else if SEQ[i] != 'A' && SEQ[i] != 'C' && SEQ[i] != 'G' && SEQ[i] != 'T' {
-         panic("Sequence contains an illegal character: " + string(SEQ[i]))
-      }
-   }
+	// replace N with Y and '*' with W (last character is '$')
+	for i := 0; i < len(SEQ)-1; i++ {
+		if SEQ[i] == 'N' {
+			SEQ[i] = 'Y'
+		} else if SEQ[i] == '*' {
+			SEQ[i] = 'W'
+		} else if SEQ[i] != 'A' && SEQ[i] != 'C' && SEQ[i] != 'G' && SEQ[i] != 'T' {
+			panic("Sequence contains an illegal character: " + string(SEQ[i]))
+		}
+	}
 }
-
-
 
 //-----------------------------------------------------------------------------
 func (I *Index) Show() {
 	fmt.Printf(" %6s %6s  OCC\n", "Freq", "C")
-	for i:=0; i < len(I.SYMBOLS); i++ {
+	for i := 0; i < len(I.SYMBOLS); i++ {
 		c := byte(I.SYMBOLS[i])
 		fmt.Printf("%c%6d %6d  %d\n", c, I.Freq[c], I.C[c], I.OCC[c])
 	}
-   fmt.Printf("SA ")
-   for i:=0; i<len(I.SA); i++ {
-      fmt.Print(I.SA[i], " ")
-   }
-   fmt.Println()
+	fmt.Printf("SA ")
+	for i := 0; i < len(I.SA); i++ {
+		fmt.Print(I.SA[i], " ")
+	}
+	fmt.Println()
 }
 
 //-----------------------------------------------------------------------------
-
