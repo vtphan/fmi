@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"sort"
@@ -50,7 +49,7 @@ func check_for_error(e error) {
 // Build FM index given the file storing the text.
 func New(file string) *Index {
 	I := new(Index)
-	ReadSequence(file)
+	ReadFasta(file)
 	I.build_suffix_array()
 	I.build_bwt_fmindex()
 	return I
@@ -115,13 +114,13 @@ func Load(dir string) *Index {
 	// Second, load Suffix array and OCC
 	I.OCC = make(map[byte][]uint32)
 	var wg sync.WaitGroup
-	wg.Add(5)
+	wg.Add(len(I.SYMBOLS) + 1)
 	go func() {
 		defer wg.Done()
 		I.SA = _load_slice(path.Join(dir, "sa"), I.LEN)
 	}()
 	Symb_OCC_chan := make(chan Symb_OCC)
-	for _, symb := range I.SYMBOLS[0:4] {
+	for _, symb := range I.SYMBOLS {
 		go func(symb int) {
 			defer wg.Done()
 			Symb_OCC_chan <- Symb_OCC{symb, _load_slice(path.Join(dir, "occ."+string(symb)), I.LEN)}
@@ -155,7 +154,7 @@ func (I *Index) Save(dirname string) {
 	os.Mkdir(dir, 0777)
 
 	var wg sync.WaitGroup
-	wg.Add(5)
+	wg.Add(len(I.SYMBOLS) + 1)
 
 	go func() {
 		defer wg.Done()
@@ -209,7 +208,7 @@ func (I *Index) build_bwt_fmindex() {
 			bwt[i] = SEQ[I.SA[i]-1]
 		}
 		if bwt[i] == '$' {
-			I.END_POS = i
+			I.END_POS = i // this is no longer correct due to existence of many $'s
 		}
 	}
 
@@ -236,13 +235,10 @@ func (I *Index) build_bwt_fmindex() {
 			}
 		}
 	}
-	I.SYMBOLS = I.SYMBOLS[1:] // Remove $, which is the first symbol
-	delete(I.OCC, '$')
-	delete(I.C, '$')
-	delete(I.OCC, 'Y')
-	delete(I.C, 'Y')
-	delete(I.OCC, 'W')
-	delete(I.C, 'W')
+	// I.SYMBOLS = I.SYMBOLS[1:] // Remove $, which is the first symbol
+	// delete(I.OCC, '$')
+	// delete(I.C, '$')
+	fmt.Println("Sequence", string(SEQ))
 
 }
 
@@ -309,37 +305,28 @@ func (I *Index) Repeat(j, read_len int) []int {
 }
 
 //-----------------------------------------------------------------------------
-func ReadSequence(file string) {
+func ReadFasta(file string) {
 	f, err := os.Open(file)
 	check_for_error(err)
 	defer f.Close()
 
-	if file[len(file)-6:] == ".fasta" {
-		scanner := bufio.NewScanner(f)
-		byte_array := make([]byte, 0)
-		for scanner.Scan() {
-			line := scanner.Bytes()
-			if len(line) > 0 && line[0] != '>' {
-				byte_array = append(byte_array, bytes.Trim(line, "\n\r ")...)
-			}
-		}
-		SEQ = append(byte_array, byte('$'))
-	} else {
-		byte_array, err := ioutil.ReadFile(file)
-		check_for_error(err)
-		SEQ = append(bytes.Trim(byte_array, "\n\r "), byte('$'))
+	if file[len(file)-6:] != ".fasta" {
+		panic("ReadFasta:" + file + "is not a fasta file.")
 	}
 
-	// replace N with Y and '*' with W (last character is '$')
-	for i := 0; i < len(SEQ)-1; i++ {
-		if SEQ[i] == 'N' {
-			SEQ[i] = 'Y'
-		} else if SEQ[i] == '*' {
-			SEQ[i] = 'W'
-		} else if SEQ[i] != 'A' && SEQ[i] != 'C' && SEQ[i] != 'G' && SEQ[i] != 'T' {
-			panic("Sequence contains an illegal character: " + string(SEQ[i]))
+	scanner := bufio.NewScanner(f)
+	byte_array := make([]byte, 0)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) > 0 {
+			if line[0] != '>' {
+				byte_array = append(byte_array, bytes.Trim(line, "\n\r ")...)
+			} else if len(byte_array) > 0 {
+				byte_array = append(byte_array, byte('$'))
+			}
 		}
 	}
+	SEQ = append(byte_array, byte('$'))
 }
 
 //-----------------------------------------------------------------------------
