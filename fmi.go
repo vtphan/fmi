@@ -242,6 +242,10 @@ func (I *Index) build_bwt_fmindex() {
 
 }
 
+func (I *Index) Check() {
+	fmt.Println("Search for SEQ returns", I.Search(SEQ[0:len(SEQ)-1]))
+}
+
 // Search for all occurences of pattern in SEQ
 func (I *Index) Search(pattern []byte) []int {
 	sp, ep, _ := I.SearchFrom(pattern, len(pattern)-1)
@@ -251,6 +255,7 @@ func (I *Index) Search(pattern []byte) []int {
 	}
 	return res
 }
+
 
 // Returns starting, ending positions (sp, ep) and last-matched position (i)
 func (I *Index) SearchFrom(pattern []byte, start_pos int) (int, int, int) {
@@ -277,6 +282,7 @@ func (I *Index) SearchFrom(pattern []byte, start_pos int) (int, int, int) {
 }
 
 // Search for all repeats of SEQ[j:j+read_len] in SEQ
+// Panic: index of out range if encounter an unknown character
 func (I *Index) Repeat(j, read_len int) []int {
 	var sp, ep, offset uint32
 	var ok bool
@@ -322,7 +328,7 @@ func ReadFasta(file string) {
 			if line[0] != '>' {
 				byte_array = append(byte_array, bytes.Trim(line, "\n\r ")...)
 			} else if len(byte_array) > 0 {
-				byte_array = append(byte_array, byte('$'))
+				byte_array = append(byte_array, byte('|'))
 			}
 		}
 	}
