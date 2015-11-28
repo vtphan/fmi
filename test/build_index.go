@@ -26,12 +26,10 @@ func main() {
 		panic("Usage: go run build_index.go file.fasta")
 	}
 	// runtime.GOMAXPROCS(runtime.NumCPU())
-	show_memstat("before")
+	// show_memstat("before")
 	idx := fmi.New(os.Args[1])
 	idx.Save(os.Args[1])
-	// for i := 0; i < len(idx.SA); i++ {
-	// 	fmt.Println(i, idx.SA[i])
-	// }
 	idx.Show()
-	show_memstat("after")
+	idx.Check()
+	// show_memstat("after")
 }
