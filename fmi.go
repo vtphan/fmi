@@ -186,7 +186,6 @@ func (I *Index) Save(dirname string) {
 func (I *Index) build_suffix_array() {
 	I.LEN = uint32(len(SEQ))
 	I.SA = make([]uint32, I.LEN)
-	// SA := qsufsort(SEQ)
 	SA := make([]int, I.LEN)
 	ws := &WorkSpace{}
 	ws.ComputeSuffixArray(SEQ, SA)
