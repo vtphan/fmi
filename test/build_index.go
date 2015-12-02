@@ -32,6 +32,6 @@ func main() {
 	// for i := 0; i < len(idx.SA); i++ {
 	// 	fmt.Println(i, idx.SA[i])
 	// }
-	idx.Show()
+	// idx.Show()
 	show_memstat("after")
 }
