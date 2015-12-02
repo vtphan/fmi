@@ -255,7 +255,6 @@ func (I *Index) Search(pattern []byte) []int {
 	return res
 }
 
-
 // Returns starting, ending positions (sp, ep) and last-matched position (i)
 func (I *Index) SearchFrom(pattern []byte, start_pos int) (int, int, int) {
 	var offset uint32

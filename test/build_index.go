@@ -31,7 +31,7 @@ func main() {
 	idx.Save(os.Args[1])
 	// idx.Show()
 	show_memstat("after")
-	idx.Show()
+	// idx.Show()
 	idx.Check()
 	// show_memstat("after")
 }
