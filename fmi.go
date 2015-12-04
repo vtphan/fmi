@@ -2,8 +2,6 @@
    Copyright 2015 Vinhthuy Phan
 	Compressed FM index.
 	Todo:
-	- replace uint32 with uint64
-	- remove SA
 	- compress
 */
 package fmi
@@ -13,6 +11,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"sort"
@@ -26,7 +25,10 @@ var Debug bool
 //-----------------------------------------------------------------------------
 var SEQ []byte
 
+// var SA []uint64
+
 type Index struct {
+	BWT []byte
 	SA  []uint64          // suffix array
 	C   map[byte]uint64   // count table
 	OCC map[byte][]uint64 // occurence table
@@ -79,7 +81,7 @@ func Load(dir string) *Index {
 		scanner := bufio.NewScanner(f)
 		scanner.Split(bufio.ScanBytes)
 		for i := 0; scanner.Scan(); i++ {
-			// convert 4 consecutive bytes to a uint64 number
+			// convert 8 consecutive bytes to a uint64 number
 			v[i] = uint64(scanner.Bytes()[0])
 			scanner.Scan()
 			v[i] += uint64(scanner.Bytes()[0]) << 8
@@ -123,14 +125,21 @@ func Load(dir string) *Index {
 		I.Freq[symb], I.C[symb], I.EP[symb] = freq, c, ep
 	}
 
-	// Second, load Suffix array and OCC
+	// Second, load Suffix array, BWT and OCC
 	I.OCC = make(map[byte][]uint64)
 	var wg sync.WaitGroup
-	wg.Add(len(I.SYMBOLS) + 1)
+	wg.Add(len(I.SYMBOLS) + 2)
 	go func() {
 		defer wg.Done()
 		I.SA = _load_slice(path.Join(dir, "sa"), I.LEN)
 	}()
+
+	go func() {
+		defer wg.Done()
+		I.BWT, err = ioutil.ReadFile(path.Join(dir, "bwt"))
+		check_for_error(err)
+	}()
+
 	Symb_OCC_chan := make(chan Symb_OCC)
 	for _, symb := range I.SYMBOLS {
 		go func(symb int) {
@@ -158,7 +167,8 @@ func (I *Index) Save(dirname string) {
 		check_for_error(err)
 		defer f.Close()
 		w := bufio.NewWriter(f)
-		binary.Write(w, binary.LittleEndian, s)
+		err = binary.Write(w, binary.LittleEndian, s)
+		check_for_error(err)
 		w.Flush()
 	}
 
@@ -166,11 +176,17 @@ func (I *Index) Save(dirname string) {
 	os.Mkdir(dir, 0777)
 
 	var wg sync.WaitGroup
-	wg.Add(len(I.SYMBOLS) + 1)
+	wg.Add(len(I.SYMBOLS) + 2)
 
 	go func() {
 		defer wg.Done()
 		_save_slice(I.SA, path.Join(dir, "sa"))
+	}()
+
+	go func() {
+		defer wg.Done()
+		err := ioutil.WriteFile(path.Join(dir, "bwt"), I.BWT, 0777)
+		check_for_error(err)
 	}()
 
 	for symb := range I.OCC {
@@ -209,16 +225,16 @@ func (I *Index) build_suffix_array() {
 //-----------------------------------------------------------------------------
 func (I *Index) build_bwt_fmindex() {
 	I.Freq = make(map[byte]uint64)
-	bwt := make([]byte, I.LEN)
+	I.BWT = make([]byte, I.LEN)
 	var i uint64
 	for i = 0; i < I.LEN; i++ {
 		I.Freq[SEQ[i]]++
 		if I.SA[i] == 0 {
-			bwt[i] = SEQ[I.LEN-1]
+			I.BWT[i] = SEQ[I.LEN-1]
 		} else {
-			bwt[i] = SEQ[I.SA[i]-1]
+			I.BWT[i] = SEQ[I.SA[i]-1]
 		}
-		if bwt[i] == '$' {
+		if I.BWT[i] == '$' {
 			I.END_POS = i // this is no longer correct due to existence of many $'s
 		}
 	}
@@ -238,8 +254,8 @@ func (I *Index) build_bwt_fmindex() {
 		I.EP[curr_c] = I.C[curr_c] + I.Freq[curr_c] - 1
 	}
 
-	for j := 0; j < len(bwt); j++ {
-		I.OCC[bwt[j]][j] = 1
+	for j := 0; j < len(I.BWT); j++ {
+		I.OCC[I.BWT[j]][j] = 1
 		if j > 0 {
 			for symbol := range I.OCC {
 				I.OCC[symbol][j] += I.OCC[symbol][j-1]
@@ -320,8 +336,12 @@ func (I *Index) Show() {
 	for i := 0; i < len(I.SA); i++ {
 		fmt.Print(I.SA[i], " ")
 	}
+	fmt.Printf("\nBWT ")
+	for i := 0; i < len(I.BWT); i++ {
+		fmt.Print(string(I.BWT[i]))
+	}
 	fmt.Println()
-	fmt.Println(string(SEQ))
+	fmt.Println("SEQ", string(SEQ))
 }
 
 //-----------------------------------------------------------------------------
