@@ -346,6 +346,7 @@ func (I *Index) Show() {
 		fmt.Print(I.SA[i], " ")
 	}
 	fmt.Println()
+	fmt.Println(string(SEQ))
 }
 
 //-----------------------------------------------------------------------------
