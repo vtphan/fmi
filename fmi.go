@@ -1,6 +1,10 @@
 /*
-   Copyright 2013 Vinhthuy Phan
-	FM index.
+   Copyright 2015 Vinhthuy Phan
+	Compressed FM index.
+	Todo:
+	- replace uint32 with int
+	- remove SA
+	- compress
 */
 package fmi
 
@@ -245,22 +249,11 @@ func (I *Index) Check() {
 	fmt.Println("Search for SEQ returns", I.Search(SEQ[0:len(SEQ)-1]))
 }
 
-// Search for all occurences of pattern in SEQ
-func (I *Index) Search(pattern []byte) []int {
-	sp, ep, _ := I.SearchFrom(pattern, len(pattern)-1)
-	res := make([]int, ep-sp+1)
-	for k := sp; k <= ep; k++ {
-		res[k-sp] = int(I.SA[k])
-	}
-	return res
-}
-
-
 // Returns starting, ending positions (sp, ep) and last-matched position (i)
-func (I *Index) SearchFrom(pattern []byte, start_pos int) (int, int, int) {
+func (I *Index) Search(pattern []byte) (int, int, int) {
 	var offset uint32
 	var i int
-
+	start_pos := len(pattern)-1
 	c := pattern[start_pos]
 	sp, ok := I.C[c]
 	if !ok {
@@ -278,35 +271,6 @@ func (I *Index) SearchFrom(pattern []byte, start_pos int) (int, int, int) {
 		}
 	}
 	return int(sp), int(ep), i + 1
-}
-
-// Search for all repeats of SEQ[j:j+read_len] in SEQ
-// Panic: index of out range if encounter an unknown character
-func (I *Index) Repeat(j, read_len int) []int {
-	var sp, ep, offset uint32
-	var ok bool
-
-	c := SEQ[j+read_len-1]
-	sp, ok = I.C[c]
-	if !ok {
-		return make([]int, 0)
-	}
-	ep = I.EP[c]
-	for i := int(read_len - 2); sp <= ep && i >= 0; i-- {
-		c = SEQ[j+int(i)]
-		offset, ok = I.C[c]
-		if ok {
-			sp = offset + I.OCC[c][sp-1]
-			ep = offset + I.OCC[c][ep] - 1
-		} else {
-			return make([]int, 0)
-		}
-	}
-	res := make([]int, ep-sp+1)
-	for k := sp; k <= ep; k++ {
-		res[k-sp] = int(I.SA[k])
-	}
-	return res
 }
 
 //-----------------------------------------------------------------------------
