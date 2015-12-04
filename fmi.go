@@ -2,7 +2,7 @@
    Copyright 2015 Vinhthuy Phan
 	Compressed FM index.
 	Todo:
-	- replace uint32 with int
+	- replace uint32 with uint64
 	- remove SA
 	- compress
 */
@@ -27,16 +27,16 @@ var Debug bool
 var SEQ []byte
 
 type Index struct {
-	SA  []uint32          // suffix array
-	C   map[byte]uint32   // count table
-	OCC map[byte][]uint32 // occurence table
+	SA  []uint64          // suffix array
+	C   map[byte]uint64   // count table
+	OCC map[byte][]uint64 // occurence table
 
-	END_POS uint32          // position of "$" in the text
+	END_POS uint64          // position of "$" in the text
 	SYMBOLS []int           // sorted symbols
-	EP      map[byte]uint32 // ending row/position of each symbol
+	EP      map[byte]uint64 // ending row/position of each symbol
 
-	LEN  uint32
-	Freq map[byte]uint32 // Frequency of each symbol
+	LEN  uint64
+	Freq map[byte]uint64 // Frequency of each symbol
 }
 
 //
@@ -63,30 +63,38 @@ func New(file string) *Index {
 
 type Symb_OCC struct {
 	Symb int
-	OCC  []uint32
+	OCC  []uint64
 }
 
 //-----------------------------------------------------------------------------
 // Load FM index. Usage:  idx := Load(index_file)
 func Load(dir string) *Index {
 
-	_load_slice := func(filename string, length uint32) []uint32 {
+	_load_slice := func(filename string, length uint64) []uint64 {
 		f, err := os.Open(filename)
 		check_for_error(err)
 		defer f.Close()
 
-		v := make([]uint32, length)
+		v := make([]uint64, length)
 		scanner := bufio.NewScanner(f)
 		scanner.Split(bufio.ScanBytes)
 		for i := 0; scanner.Scan(); i++ {
-			// convert 4 consecutive bytes to a uint32 number
-			v[i] = uint32(scanner.Bytes()[0])
+			// convert 4 consecutive bytes to a uint64 number
+			v[i] = uint64(scanner.Bytes()[0])
 			scanner.Scan()
-			v[i] += uint32(scanner.Bytes()[0]) << 8
+			v[i] += uint64(scanner.Bytes()[0]) << 8
 			scanner.Scan()
-			v[i] += uint32(scanner.Bytes()[0]) << 16
+			v[i] += uint64(scanner.Bytes()[0]) << 16
 			scanner.Scan()
-			v[i] += uint32(scanner.Bytes()[0]) << 24
+			v[i] += uint64(scanner.Bytes()[0]) << 24
+			scanner.Scan()
+			v[i] += uint64(scanner.Bytes()[0]) << 32
+			scanner.Scan()
+			v[i] += uint64(scanner.Bytes()[0]) << 40
+			scanner.Scan()
+			v[i] += uint64(scanner.Bytes()[0]) << 48
+			scanner.Scan()
+			v[i] += uint64(scanner.Bytes()[0]) << 56
 		}
 		// r := bufio.NewReader(f)
 		// binary.Read(r, binary.LittleEndian, v)
@@ -101,14 +109,14 @@ func Load(dir string) *Index {
 	defer f.Close()
 
 	var symb byte
-	var freq, c, ep uint32
+	var freq, c, ep uint64
 	scanner := bufio.NewScanner(f)
 	scanner.Scan()
 	fmt.Sscanf(scanner.Text(), "%d%d\n", &I.LEN, &I.END_POS)
 
-	I.Freq = make(map[byte]uint32)
-	I.C = make(map[byte]uint32)
-	I.EP = make(map[byte]uint32)
+	I.Freq = make(map[byte]uint64)
+	I.C = make(map[byte]uint64)
+	I.EP = make(map[byte]uint64)
 	for scanner.Scan() {
 		fmt.Sscanf(scanner.Text(), "%c%d%d%d", &symb, &freq, &c, &ep)
 		I.SYMBOLS = append(I.SYMBOLS, int(symb))
@@ -116,7 +124,7 @@ func Load(dir string) *Index {
 	}
 
 	// Second, load Suffix array and OCC
-	I.OCC = make(map[byte][]uint32)
+	I.OCC = make(map[byte][]uint64)
 	var wg sync.WaitGroup
 	wg.Add(len(I.SYMBOLS) + 1)
 	go func() {
@@ -145,7 +153,7 @@ func Load(dir string) *Index {
 // Save the index to directory.
 func (I *Index) Save(dirname string) {
 
-	_save_slice := func(s []uint32, filename string) {
+	_save_slice := func(s []uint64, filename string) {
 		f, err := os.Create(filename)
 		check_for_error(err)
 		defer f.Close()
@@ -188,21 +196,21 @@ func (I *Index) Save(dirname string) {
 //-----------------------------------------------------------------------------
 // BWT is saved into a separate file
 func (I *Index) build_suffix_array() {
-	I.LEN = uint32(len(SEQ))
-	I.SA = make([]uint32, I.LEN)
+	I.LEN = uint64(len(SEQ))
+	I.SA = make([]uint64, I.LEN)
 	SA := make([]int, I.LEN)
 	ws := &WorkSpace{}
 	ws.ComputeSuffixArray(SEQ, SA)
 	for i := range SA {
-		I.SA[i] = uint32(SA[i])
+		I.SA[i] = uint64(SA[i])
 	}
 }
 
 //-----------------------------------------------------------------------------
 func (I *Index) build_bwt_fmindex() {
-	I.Freq = make(map[byte]uint32)
+	I.Freq = make(map[byte]uint64)
 	bwt := make([]byte, I.LEN)
-	var i uint32
+	var i uint64
 	for i = 0; i < I.LEN; i++ {
 		I.Freq[SEQ[i]]++
 		if I.SA[i] == 0 {
@@ -215,15 +223,15 @@ func (I *Index) build_bwt_fmindex() {
 		}
 	}
 
-	I.C = make(map[byte]uint32)
-	I.OCC = make(map[byte][]uint32)
+	I.C = make(map[byte]uint64)
+	I.OCC = make(map[byte][]uint64)
 	for c := range I.Freq {
 		I.SYMBOLS = append(I.SYMBOLS, int(c))
-		I.OCC[c] = make([]uint32, I.LEN)
+		I.OCC[c] = make([]uint64, I.LEN)
 		I.C[c] = 0
 	}
 	sort.Ints(I.SYMBOLS)
-	I.EP = make(map[byte]uint32)
+	I.EP = make(map[byte]uint64)
 	for j := 1; j < len(I.SYMBOLS); j++ {
 		curr_c, prev_c := byte(I.SYMBOLS[j]), byte(I.SYMBOLS[j-1])
 		I.C[curr_c] = I.C[prev_c] + I.Freq[prev_c]
@@ -245,15 +253,18 @@ func (I *Index) build_bwt_fmindex() {
 
 }
 
+//-----------------------------------------------------------------------------
 func (I *Index) Check() {
-	fmt.Println("Search for SEQ returns", I.Search(SEQ[0:len(SEQ)-1]))
+	a, b, c := I.Search(SEQ[0 : len(SEQ)-1])
+	fmt.Println("Search for SEQ returns", a, b, c)
 }
 
+//-----------------------------------------------------------------------------
 // Returns starting, ending positions (sp, ep) and last-matched position (i)
 func (I *Index) Search(pattern []byte) (int, int, int) {
-	var offset uint32
+	var offset uint64
 	var i int
-	start_pos := len(pattern)-1
+	start_pos := len(pattern) - 1
 	c := pattern[start_pos]
 	sp, ok := I.C[c]
 	if !ok {
