@@ -11,6 +11,21 @@ import (
 	"sync"
 )
 //-----------------------------------------------------------------------------
+
+var SEQ []byte
+
+type Symb_OCC struct {
+	Symb int
+	OCC  []int64
+}
+
+//-----------------------------------------------------------------------------
+func check_for_error(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
+//-----------------------------------------------------------------------------
 func ReadFasta(file string) {
 	f, err := os.Open(file)
 	check_for_error(err)
@@ -81,7 +96,7 @@ func Load(dir string) *Index {
 	var freq, c, ep int64
 	scanner := bufio.NewScanner(f)
 	scanner.Scan()
-	fmt.Sscanf(scanner.Text(), "%d%d\n", &I.LEN, &I.END_POS)
+	fmt.Sscanf(scanner.Text(), "%d%d%d\n", &I.LEN, &I.OCC_SIZE, &I.END_POS)
 
 	I.Freq = make(map[byte]int64)
 	I.C = make(map[byte]int64)
@@ -111,7 +126,7 @@ func Load(dir string) *Index {
 	for _, symb := range I.SYMBOLS {
 		go func(symb int) {
 			defer wg.Done()
-			Symb_OCC_chan <- Symb_OCC{symb, _load_slice(path.Join(dir, "occ."+string(symb)), I.LEN)}
+			Symb_OCC_chan <- Symb_OCC{symb, _load_slice(path.Join(dir, "occ."+string(symb)), I.OCC_SIZE)}
 		}(symb)
 	}
 	go func() {
@@ -167,7 +182,7 @@ func (I *Index) Save(dirname string) {
 	check_for_error(err)
 	defer f.Close()
 	w := bufio.NewWriter(f)
-	fmt.Fprintf(w, "%d %d\n", I.LEN, I.END_POS)
+	fmt.Fprintf(w, "%d %d %d\n", I.LEN, I.OCC_SIZE, I.END_POS)
 	for i := 0; i < len(I.SYMBOLS); i++ {
 		symb := byte(I.SYMBOLS[i])
 		fmt.Fprintf(w, "%s %d %d %d\n", string(symb), I.Freq[symb], I.C[symb], I.EP[symb])

@@ -11,13 +11,9 @@ import (
 	"sort"
 )
 
-var Debug bool
-
 //-----------------------------------------------------------------------------
 // Global variables: sequence (SEQ), suffix array (SA), BWT, FM index (C, OCC)
 //-----------------------------------------------------------------------------
-var SEQ []byte
-
 type Index struct {
 	BWT []byte
 	SA  []int64          // suffix array
@@ -29,23 +25,16 @@ type Index struct {
 	EP      map[byte]int64 // ending row/position of each symbol
 
 	LEN  int64
+	OCC_SIZE int64
 	Freq map[byte]int64 // Frequency of each symbol
-}
-
-//
-
-//-----------------------------------------------------------------------------
-
-func check_for_error(e error) {
-	if e != nil {
-		panic(e)
-	}
+	M int64             // Compression ratio
 }
 
 //-----------------------------------------------------------------------------
 // Build FM index given the file storing the text.
 func New(file string) *Index {
 	I := new(Index)
+	I.M = 10
 	ReadFasta(file)
 	I.build_suffix_array()
 	I.build_bwt_fmindex()
@@ -53,16 +42,10 @@ func New(file string) *Index {
 }
 
 //-----------------------------------------------------------------------------
-
-type Symb_OCC struct {
-	Symb int
-	OCC  []int64
-}
-
-//-----------------------------------------------------------------------------
 // BWT is saved into a separate file
 func (I *Index) build_suffix_array() {
 	I.LEN = int64(len(SEQ))
+	I.OCC_SIZE = int64(len(SEQ))
 	I.SA = make([]int64, I.LEN)
 	SA := make([]int, I.LEN)
 	ws := &WorkSpace{}
@@ -85,7 +68,7 @@ func (I *Index) build_bwt_fmindex() {
 			I.BWT[i] = SEQ[I.SA[i]-1]
 		}
 		if I.BWT[i] == '$' {
-			I.END_POS = i // this is no longer correct due to existence of many $'s
+			I.END_POS = i
 		}
 	}
 
@@ -93,7 +76,7 @@ func (I *Index) build_bwt_fmindex() {
 	I.OCC = make(map[byte][]int64)
 	for c := range I.Freq {
 		I.SYMBOLS = append(I.SYMBOLS, int(c))
-		I.OCC[c] = make([]int64, I.LEN)
+		I.OCC[c] = make([]int64, I.OCC_SIZE)
 		I.C[c] = 0
 	}
 	sort.Ints(I.SYMBOLS)
@@ -115,14 +98,6 @@ func (I *Index) build_bwt_fmindex() {
 	// I.SYMBOLS = I.SYMBOLS[1:] // Remove $, which is the first symbol
 	// delete(I.OCC, '$')
 	// delete(I.C, '$')
-	fmt.Println("Sequence", string(SEQ))
-
-}
-
-//-----------------------------------------------------------------------------
-func (I *Index) Check() {
-	a, b, c := I.Search(SEQ[0 : len(SEQ)-1])
-	fmt.Println("Search for SEQ returns", a, b, c)
 }
 
 //-----------------------------------------------------------------------------
@@ -168,5 +143,9 @@ func (I *Index) Show() {
 	fmt.Println()
 	fmt.Println("SEQ", string(SEQ))
 }
-
+//-----------------------------------------------------------------------------
+func (I *Index) Check() {
+	a, b, c := I.Search(SEQ[0 : len(SEQ)-1])
+	fmt.Println("Search for SEQ returns", a, b, c)
+}
 //-----------------------------------------------------------------------------
