@@ -1,6 +1,8 @@
 /*
    Copyright 2015 Vinhthuy Phan
 	Compressed FM index.
+	Todo:
+	 - identify genomic region containing the match of a search.
 */
 package fmi
 
